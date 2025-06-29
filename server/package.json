@@ -4,8 +4,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "node copy-shared.js"
+    "start": "node copy-shared.js && node server.js"
   },
   "dependencies": {
     "socket.io": "^4.8.1",

@@ -2,8 +2,8 @@
   "name": "fps-client",
   "version": "1.0.0",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite"
+    "build": "node copy-shared.js && vite build",
+    "dev": "node copy-shared.js && vite"
   },
   "dependencies": {
     "socket.io-client": "^4.7.2",

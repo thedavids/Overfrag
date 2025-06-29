@@ -14,14 +14,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@shared': path.resolve(__dirname, '../shared') // adjust path if needed
+      shared: path.resolve(__dirname, './shared')
     }
-  },
-  optimizeDeps: {
-    include: ['three'],
-    entries: [
-      './main.js',
-      '../shared/octree.js' // 👈 explicitly tell Vite to scan this file too
-    ]
   }
 });
