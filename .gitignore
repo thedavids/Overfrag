@@ -2,3 +2,4 @@ client/dist/
 client/node_modules/
 models/
 node_modules/
+client/.env.deploy
