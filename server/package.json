@@ -5,13 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "postinstall": "cpx ../shared/** ./shared"
+    "postinstall": "node copy-shared.js"
   },
   "dependencies": {
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.7.2",
     "three": "^0.160.0",
-    "three-mesh-bvh": "^0.9.1",
-    "cpx": "^1.5.0"
+    "three-mesh-bvh": "^0.9.1"
   }
 }
