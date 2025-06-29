@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Overfrag – Competitive FPS Browser Game | DailySummary.io</title>
+  <meta name="description"
+    content="Overfrag is a fast-paced, free, competitive FPS you can play instantly in your browser. No downloads, no sign-up — just pure shooting skill and adrenaline.">
+  <meta name="keywords"
+    content="Overfrag, browser FPS, multiplayer shooter, online FPS game, competitive shooting game, instant play, DailySummary.io, WebGL shooter, free browser FPS, free multiplayer shooter">
+
+  <meta name="robots" content="index, follow" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Overfrag – Competitive FPS Game" />
+  <meta property="og:description"
+    content="Fast-paced online FPS action you can play instantly. Jump into Overfrag now — no installs, just pure skill and frags." />
+  <meta property="og:url" content="https://www.dailysummary.io/client.html" />
+  <meta property="og:image" content="https://www.dailysummary.io/preview.png" />
+  <meta property="og:image:alt" content="Overfrag – Competitive FPS Game" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Overfrag – Competitive FPS Game" />
+  <meta name="twitter:description"
+    content="Play Overfrag, a browser-based FPS with tight controls and fast action. No downloads. No ads. Just frags." />
+  <meta name="twitter:image" content="https://www.dailysummary.io/preview.png" />
+  <meta name="twitter:image:alt" content="Overfrag – Competitive FPS Game" />
+
+  <!-- Structured Data for SEO (Schema.org) -->
+  <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Overfrag",
+        "description": "Overfrag is a competitive, skill-based first-person shooter you can play right in your browser. No ads. No installs. Just frags.",
+        "url": "https://www.dailysummary.io/client.html",
+        "image": "https://www.dailysummary.io/preview.png",
+        "author": {
+          "@type": "Organization",
+          "name": "DailySummary.io"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "DailySummary.io"
+        },
+        "keywords": "Overfrag, FPS, shooter, multiplayer, browser game, instant play, skill-based shooter, online FPS"
+      }
+    </script>
+  <style>
+    html,
+    body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -ms-touch-action: none;
+      font-family: sans-serif;
+    }
+
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px;
+      border-radius: 8px;
+      width: 280px;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+    }
+
+    #roomList {
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+
+    #roomList div {
+      padding: 4px;
+      background: #eee;
+      margin: 2px 0;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    #roomList div:hover {
+      background: #ddd;
+    }
+
+    #touch-controls,
+    #touch-controls * {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    #touch-controls {
+      position: absolute;
+      z-index: 2;
+      width: 100%;
+      bottom: 0px;
+    }
+
+    #touch-controls {
+      display: none;
+    }
+
+    /* Show only on touch devices (phones/tablets) */
+    @media (hover: none) and (pointer: coarse) {
+      #touch-controls {
+        display: block;
+      }
+    }
+
+    #touch-controls button {
+      width: 80px;
+      height: 80px;
+      font-size: 36px;
+      opacity: 0.8;
+      border-radius: 16px;
+      border: none;
+      background: #333;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      line-height: 1;
+      padding: 0;
+    }
+
+    @media (max-width: 600px) {
+      #touch-controls button {
+        width: 64px;
+        height: 64px;
+        font-size: 30px;
+      }
+    }
+
+    #btn-jump {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+    }
+
+    #touch-wheel {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: 2px solid white;
+      background: rgba(0, 0, 0, 0.2);
+      touch-action: none;
+      z-index: 3;
+    }
+
+    .tooltip-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip-content {
+      display: none;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      padding: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    .tooltip-container:hover .tooltip-content {
+      display: block;
+    }
+
+    .tooltip-button {
+      background: #222;
+      color: white;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: help;
+      font-size: 12px;
+    }
+
+    #menu input,
+    #menu select,
+    #menu button {
+      display: block;
+      width: 100%;
+      max-width: 300px;
+      margin: 5px auto;
+      padding: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="ui">
+    <div id="menu">
+      <input id="playerName" placeholder="Enter name" />
+      <select id="mapSelector">
+        <option>Loading maps...</option>
+      </select>
+      <button id="btnCreateRoom">Start Game</button>
+      <input id="roomId" placeholder="Room ID to join" />
+      <button id="btnJoinRoom">Join Game</button>
+      <div><strong>Active Rooms:</strong></div>
+      <div id="roomList">Connecting to server...</div>
+      <div id="server-status"></div>
+    </div>
+    <div id="game" style="display:none;">
+      <div id="info"></div>
+      <div style="display: flex; gap: 10px; margin-top: 5px">
+        <button id="btnLeaveeRoom">Leave Game</button>
+        <button id="toggleView">👁 Toggle View</button>
+        <div class="tooltip-container">
+          <button class="tooltip-button">❔</button>
+          <div class="tooltip-content">
+            <strong>Controls:</strong><br>
+            <kbd>W</kbd>, <kbd>A</kbd>, <kbd>S</kbd>, <kbd>D</kbd> — Move<br>
+            <kbd>Space</kbd> — Jump<br>
+            <kbd>Mouse</kbd> — Look<br>
+            <kbd>Left Click</kbd> — Shoot<br>
+            <kbd>Middle / Right Click</kbd> — Grapple<br>
+            <kbd>V</kbd> — Toggle View
+          </div>
+        </div>
+      </div>
+      <div id="server-messages" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+  <div id="canvas-container"></div>
+  <div id="touch-controls">
+    <div id="touch-wheel">
+    </div>
+    <button id="btn-jump">🔼</button>
+    <button id="btn-fire" style="position: absolute; right: 20px; bottom: 110px;">🔫</button>
+    <button id="btn-grapple" style="position: absolute; right: 110px; bottom: 110px;">🪢</button>
+    <button id="btn-switch" style="position: absolute; right: 20px; bottom: 200px;">🔁</button>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
