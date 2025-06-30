@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 
 export class OctreeNode {
-    constructor(center, size, depth = 0, maxDepth = 5, maxObjects = 8) {
+    constructor(center, size, depth = 0, maxDepth = 5, maxObjects = 8, mergeDist = 20) {
         this.center = center; // { x, y, z }
         this.size = size;     // scalar length of cube's edge
         this.depth = depth;
         this.maxDepth = maxDepth;
         this.maxObjects = maxObjects;
+        this.mergeDist = mergeDist;
 
         this.objects = [];
         this.children = null;
@@ -43,7 +44,7 @@ export class OctreeNode {
 
         if (object.isMesh && object.geometry && !object.__processedForOctree) {
             const triangles = this.extractTrianglesFromMesh(object);
-            const groups = this.groupTrianglesByProximity(triangles, 20.0);
+            const groups = this.groupTrianglesByProximity(triangles);
 
             for (const group of groups) {
                 const { center, size, box } = this.computeGroupAABB(group);
@@ -57,8 +58,7 @@ export class OctreeNode {
                 clone.size = size;
                 clone.userData = {
                     ...object.userData,
-                    box,
-                    __triangles: group // for precise collision if needed
+                    box
                 };
 
                 this.insert(clone, false); // Standard octree path
@@ -124,7 +124,8 @@ export class OctreeNode {
                 half,
                 this.depth + 1,
                 this.maxDepth,
-                this.maxObjects
+                this.maxObjects,
+                this.mergeDist
             );
         });
 
@@ -176,64 +177,47 @@ export class OctreeNode {
         return triangles;
     }
 
-    groupTrianglesByProximity(triangles, mergeDist) {
-        const grid = new Map();
+    groupTrianglesByProximity(triangles) {
         const groups = [];
-        const bucketSize = mergeDist;
+        const visited = new Set();
 
-        const getKey = (v) => {
-            const xi = Math.floor(v.x / bucketSize);
-            const yi = Math.floor(v.y / bucketSize);
-            const zi = Math.floor(v.z / bucketSize);
-            return `${xi},${yi},${zi}`;
+        const vertexKey = (v) => `${v.x.toFixed(5)},${v.y.toFixed(5)},${v.z.toFixed(5)}`;
+
+        // Build a vertex-to-triangle map
+        const vertexMap = new Map();
+        for (let i = 0; i < triangles.length; i++) {
+            const tri = triangles[i];
+            for (const v of tri) {
+                const key = vertexKey(v);
+                if (!vertexMap.has(key)) vertexMap.set(key, []);
+                vertexMap.get(key).push(i);
+            }
+        }
+
+        const dfs = (i, group) => {
+            if (visited.has(i)) return;
+            visited.add(i);
+            const tri = triangles[i];
+            group.push(tri);
+            for (const v of tri) {
+                const key = vertexKey(v);
+                for (const neighborIndex of vertexMap.get(key)) {
+                    dfs(neighborIndex, group);
+                }
+            }
         };
 
-        const offsets = [-1, 0, 1];
-
-        for (const tri of triangles) {
-            const center = this.triangleCenter(tri);
-            const key = getKey(center);
-
-            let added = false;
-
-            // Search neighboring buckets for nearby groups
-            for (const dx of offsets) {
-                for (const dy of offsets) {
-                    for (const dz of offsets) {
-                        const neighborKey = getKey({
-                            x: center.x + dx * bucketSize,
-                            y: center.y + dy * bucketSize,
-                            z: center.z + dz * bucketSize
-                        });
-
-                        const bucketGroups = grid.get(neighborKey);
-                        if (bucketGroups) {
-                            for (const group of bucketGroups) {
-                                if (group.some(t => this.triangleCenter(t).distanceTo(center) <= mergeDist)) {
-                                    group.push(tri);
-                                    added = true;
-                                    break;
-                                }
-                            }
-                            if (added) break;
-                        }
-                    }
-                    if (added) break;
-                }
-                if (added) break;
-            }
-
-            if (!added) {
-                const newGroup = [tri];
-                groups.push(newGroup);
-                const bucket = grid.get(key) || [];
-                bucket.push(newGroup);
-                grid.set(key, bucket);
+        for (let i = 0; i < triangles.length; i++) {
+            if (!visited.has(i)) {
+                const group = [];
+                dfs(i, group);
+                groups.push(group);
             }
         }
 
         return groups;
     }
+
 
     triangleCenter([a, b, c]) {
         return a.clone().add(b).add(c).multiplyScalar(1 / 3);
@@ -385,6 +369,138 @@ export class OctreeNode {
             }
         };
         return this.queryRange(range, result, filterFn);
+    }
+
+    exportCollidersFromOctree() {
+        const colliders = [];
+
+        function traverse(node) {
+            for (const obj of node.objects) {
+                if (!obj.center || !obj.size) continue;
+
+                const [sx, sy, sz] = obj.size;
+                const volume = sx * sy * sz;
+                const minVolume = 0.01;
+
+                //if (volume >= minVolume) {
+
+                colliders.push({
+                    center: {
+                        x: obj.center.x,
+                        y: obj.center.y,
+                        z: obj.center.z
+                    },
+                    size: [...obj.size],
+                    type: obj.userData?.type || 'box',
+                    name: obj.name || undefined,
+                    model: obj.userData?.model,
+                    file: obj.userData?.file,
+                    offset: obj.userData?.offset
+                });
+                //}
+            }
+
+            if (node.children) {
+                for (const child of node.children) {
+                    traverse(child);
+                }
+            }
+        }
+
+        traverse(this);
+        return colliders;
+    }
+
+    count() {
+        let total = this.objects.length;
+
+        if (this.children) {
+            for (const child of this.children) {
+                total += child.count();
+            }
+        }
+
+        return total;
+    }
+
+    erase(scene) {
+        const toRemove = scene.children.filter(obj => obj.userData?.isOctree === true);
+        for (const obj of toRemove) {
+            scene.remove(obj);
+            obj.geometry?.dispose();
+            obj.material?.dispose();
+        }
+    }
+
+    draw(scene) {
+        this.erase(scene);
+        // === Export Colliders from Octree ===
+        const colliders = this.exportCollidersFromOctree();
+        for (const collider of colliders) {
+            // Visual helper
+            const geom = new THREE.BoxGeometry(...collider.size);
+            const edges = new THREE.EdgesGeometry(geom); // <- extract only box edges
+            const line = new THREE.LineSegments(
+                edges,
+                new THREE.LineBasicMaterial({ color: 0x00ff00 })
+            );
+
+            line.position.set(collider.center.x, collider.center.y, collider.center.z);
+            line.name = `OctreeColliderBox_${Math.random()}`;
+            line.userData.isOctree = true;
+            scene.add(line);
+        }
+    }
+
+    toJSON() {
+        return {
+            center: this.center,
+            size: this.size,
+            depth: this.depth,
+            maxDepth: this.maxDepth,
+            maxObjects: this.maxObjects,
+            objects: this.objects.map(obj => ({
+                name: obj.name || undefined,
+                center: obj.center,
+                size: obj.size,
+                userData: (obj.userData?.file != null || obj.userData?.model != null || obj.userData?.offset != null) ?
+                    {
+                        file: obj.userData?.file,
+                        model: obj.userData?.model,
+                        offset: obj.userData?.offset
+                    } :
+                    undefined
+            })),
+            children: this.children ? this.children.map(child => child.toJSON()) : null
+        };
+    }
+
+    static fromJSON(data) {
+        const node = new OctreeNode(data.center, data.size, data.depth, data.maxDepth, data.maxObjects);
+        node.objects = data.objects.map(o => {
+            const mesh = {};
+            mesh.name = o.name || '';
+            mesh.center = o.center;
+            mesh.size = o.size;
+            mesh.userData = { ...o.userData };
+            mesh.userData.box = {
+                min: {
+                    x: o.center.x - o.size[0] / 2,
+                    y: o.center.y - o.size[1] / 2,
+                    z: o.center.z - o.size[2] / 2
+                },
+                max: {
+                    x: o.center.x + o.size[0] / 2,
+                    y: o.center.y + o.size[1] / 2,
+                    z: o.center.z + o.size[2] / 2
+                }
+            };
+            return mesh;
+        });
+        if (data.children) {
+            node.children = data.children.map(OctreeNode.fromJSON);
+        }
+        return node;
     }
 }
 

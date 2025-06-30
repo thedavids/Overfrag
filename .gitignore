@@ -3,3 +3,6 @@ client/node_modules/
 models/
 node_modules/
 client/.env.deploy
+client/shared/
+server/shared/
+mapEditor/shared/

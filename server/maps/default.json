@@ -1,0 +1,598 @@
+{
+  "name": "Jump Arena",
+  "objects": [
+    {
+      "position": { "x": -100, "y": 0, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#ff0000"
+    },
+    {
+      "position": { "x": -95, "y": 2, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#00ff00"
+    },
+    {
+      "position": { "x": -90, "y": 4, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#0000ff"
+    },
+    {
+      "position": { "x": -85, "y": 6, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#ffff00"
+    },
+    {
+      "position": { "x": -80, "y": 8, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#ff00ff"
+    },
+    {
+      "position": { "x": -75, "y": 10, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#ff0000"
+    },
+    {
+      "position": { "x": -70, "y": 12, "z": -10 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "color": "#0000ff"
+    },
+    {
+      "position": { "x": -10, "y": 0, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -5, "y": 2, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 0, "y": 4, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 5, "y": 6, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 10, "y": 8, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 15, "y": 10, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 20, "y": 12, "z": -20 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -26, "y": 0, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -24, "y": 1, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -22, "y": 2, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -20, "y": 3, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -18, "y": 4, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -16, "y": 5, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -14, "y": 6, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -12, "y": 7, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -10, "y": 8, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -8, "y": 9, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -6, "y": 10, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -4, "y": 11, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": -2, "y": 12, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 0, "y": 13, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 2, "y": 14, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 4, "y": 15, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 6, "y": 16, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 8, "y": 17, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 10, "y": 18, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 12, "y": 19, "z": 0 },
+      "size": [ 4, 1, 4 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg"
+    },
+    {
+      "position": { "x": 0, "y": 4, "z": 35 },
+      "size": [ 6, 10, 6 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": -30, "y": 0, "z": 20 },
+      "size": [ 10, 2, 10 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": -35, "y": 3, "z": 20 },
+      "size": [ 1, 6, 10 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": -25, "y": 3, "z": 20 },
+      "size": [ 1, 6, 10 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": -30, "y": 3, "z": 25 },
+      "size": [ 10, 6, 1 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": -30, "y": 7, "z": 20 },
+      "size": [ 10, 1, 10 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg"
+    },
+    {
+      "position": { "x": 0, "y": -1, "z": 0 },
+      "size": [ 200, 1, 200 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "ground",
+      "texture": "https://www.dailysummary.io/textures/stone.jpg"
+    },
+    {
+      "position": { "x": 60, "y": 20, "z": 0 },
+      "size": [ 100, 1, 100 ],
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": { "x": 1, "y": 1, "z": 1 },
+      "type": "box",
+      "texture": "https://www.dailysummary.io/textures/stone.jpg"
+    }
+  ],
+  "healthPacks": [],
+  "octree": {
+    "center": { "x": 4, "y": 9.5, "z": 0 },
+    "size": 464,
+    "depth": 0,
+    "maxDepth": 5,
+    "maxObjects": 8,
+    "objects": [
+      {
+        "center": { "x": 5, "y": 6, "z": -20 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -26, "y": 0, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -24, "y": 1, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -22, "y": 2, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -20, "y": 3, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -18, "y": 4, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -16, "y": 5, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -14, "y": 6, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -12, "y": 7, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -10, "y": 8, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -8, "y": 9, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -6, "y": 10, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -4, "y": 11, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": -2, "y": 12, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 0, "y": 13, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 2, "y": 14, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 4, "y": 15, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 6, "y": 16, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 8, "y": 17, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 10, "y": 18, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 12, "y": 19, "z": 0 },
+        "size": [ 4, 1, 4 ]
+      },
+      {
+        "center": { "x": 0, "y": -1, "z": 0 },
+        "size": [ 200, 1, 200 ]
+      },
+      {
+        "center": { "x": 60, "y": 20, "z": 0 },
+        "size": [ 100, 1, 100 ]
+      }
+    ],
+    "children": [
+      {
+        "center": { "x": -112, "y": -106.5, "z": -116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [
+          {
+            "center": { "x": -100, "y": 0, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -95, "y": 2, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -90, "y": 4, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -85, "y": 6, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -80, "y": 8, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -10, "y": 0, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -5, "y": 2, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": 0, "y": 4, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          }
+        ],
+        "children": null
+      },
+      {
+        "center": { "x": 120, "y": -106.5, "z": -116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [
+          {
+            "center": { "x": 10, "y": 8, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          }
+        ],
+        "children": null
+      },
+      {
+        "center": { "x": -112, "y": 125.5, "z": -116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [
+          {
+            "center": { "x": -75, "y": 10, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": -70, "y": 12, "z": -10 },
+            "size": [ 4, 1, 4 ]
+          }
+        ],
+        "children": null
+      },
+      {
+        "center": { "x": 120, "y": 125.5, "z": -116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [
+          {
+            "center": { "x": 15, "y": 10, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          },
+          {
+            "center": { "x": 20, "y": 12, "z": -20 },
+            "size": [ 4, 1, 4 ]
+          }
+        ],
+        "children": null
+      },
+      {
+        "center": { "x": -112, "y": -106.5, "z": 116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [
+          {
+            "center": { "x": 0, "y": 4, "z": 35 },
+            "size": [ 6, 10, 6 ]
+          },
+          {
+            "center": { "x": -30, "y": 0, "z": 20 },
+            "size": [ 10, 2, 10 ]
+          },
+          {
+            "center": { "x": -35, "y": 3, "z": 20 },
+            "size": [ 1, 6, 10 ]
+          },
+          {
+            "center": { "x": -25, "y": 3, "z": 20 },
+            "size": [ 1, 6, 10 ]
+          },
+          {
+            "center": { "x": -30, "y": 3, "z": 25 },
+            "size": [ 10, 6, 1 ]
+          },
+          {
+            "center": { "x": -30, "y": 7, "z": 20 },
+            "size": [ 10, 1, 10 ]
+          }
+        ],
+        "children": null
+      },
+      {
+        "center": { "x": 120, "y": -106.5, "z": 116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [],
+        "children": null
+      },
+      {
+        "center": { "x": -112, "y": 125.5, "z": 116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [],
+        "children": null
+      },
+      {
+        "center": { "x": 120, "y": 125.5, "z": 116 },
+        "size": 232,
+        "depth": 1,
+        "maxDepth": 5,
+        "maxObjects": 8,
+        "objects": [],
+        "children": null
+      }
+    ]
+  }
+}

@@ -1,7 +1,12 @@
 import http from 'http';
 import { Server } from 'socket.io';
-import { OctreeNode, computeMapBounds } from './shared/index.js';
+import { OctreeNode, computeMapBounds, EventBus, createMapSystem } from './shared/index.js';
 import * as THREE from 'three';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const server = http.createServer();
 const io = new Server(server, {
@@ -21,120 +26,26 @@ const rooms = {};
 const playerLastSeen = {}; // { socket.id: timestamp }
 const activeLasers = {}; // roomId -> [{ id, shooterId, origin, direction, position, life }]
 
+// === MapSystem Begin ===
 const maps = {
-  default: {
-    "name": "Jump Arena XL",
-    "objects": [
-      { "type": "ground", "position": { "x": 0, "y": -1, "z": 0 }, "size": [200, 1, 200], "texture": "https://www.dailysummary.io/textures/stone.jpg" },
-
-      { "type": "box", "position": { "x": -100, "y": 0, "z": -10 }, "size": [4, 1, 4], "color": "#ff0000" },
-      { "type": "box", "position": { "x": -95, "y": 2, "z": -10 }, "size": [4, 1, 4], "color": "#00ff00" },
-      { "type": "box", "position": { "x": -90, "y": 4, "z": -10 }, "size": [4, 1, 4], "color": "#0000ff" },
-      { "type": "box", "position": { "x": -85, "y": 6, "z": -10 }, "size": [4, 1, 4], "color": "#ffff00" },
-      { "type": "box", "position": { "x": -80, "y": 8, "z": -10 }, "size": [4, 1, 4], "color": "#ff00ff" },
-      { "type": "box", "position": { "x": -75, "y": 10, "z": -10 }, "size": [4, 1, 4], "color": "#ff0000" },
-      { "type": "box", "position": { "x": -70, "y": 12, "z": -10 }, "size": [4, 1, 4], "color": "#0000ff" },
-
-      { "type": "box", "position": { "x": -10, "y": 0, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -5, "y": 2, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 0, "y": 4, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 5, "y": 6, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 10, "y": 8, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 15, "y": 10, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 20, "y": 12, "z": -20 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-
-      { "type": "box", "position": { "x": 0, "y": 4, "z": 35 }, "size": [6, 10, 6], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-
-      { "type": "box", "position": { "x": -30, "y": 0, "z": 20 }, "size": [10, 2, 10], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-      { "type": "box", "position": { "x": -35, "y": 3, "z": 20 }, "size": [1, 6, 10], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-      { "type": "box", "position": { "x": -25, "y": 3, "z": 20 }, "size": [1, 6, 10], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-      { "type": "box", "position": { "x": -30, "y": 3, "z": 25 }, "size": [10, 6, 1], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-      { "type": "box", "position": { "x": -30, "y": 7, "z": 20 }, "size": [10, 1, 10], "texture": "https://www.dailysummary.io/textures/brick_diffuse.jpg" },
-
-      { "type": "box", "position": { "x": 60, "y": 20, "z": 0 }, "size": [100, 1, 100], "texture": "https://www.dailysummary.io/textures/stone.jpg" },
-
-      { "type": "box", "position": { "x": -26, "y": 0, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -24, "y": 1, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -22, "y": 2, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -20, "y": 3, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -18, "y": 4, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -16, "y": 5, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -14, "y": 6, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -12, "y": 7, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -10, "y": 8, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -8, "y": 9, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -6, "y": 10, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -4, "y": 11, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": -2, "y": 12, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 0, "y": 13, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 2, "y": 14, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 4, "y": 15, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 6, "y": 16, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 8, "y": 17, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 10, "y": 18, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" },
-      { "type": "box", "position": { "x": 12, "y": 19, "z": 0 }, "size": [4, 1, 4], "texture": "https://www.dailysummary.io/textures/hardwood2_diffuse.jpg" }
-    ],
-    "healthPacks": [
-      { "id": "hp1", "position": { "x": 0, "y": 11, "z": 35 }, "available": true },
-      { "id": "hp2", "position": { "x": -30, "y": 8, "z": 20 }, "available": true },
-      { "id": "hp3", "position": { "x": 40, "y": 21, "z": 0 }, "available": true }
-    ]
-  },
-  road: {
-    "name": "Simple Road Test",
-    "objects": [
-      { "position": { "x": 0, "y": -1, "z": 0 }, "size": [100, 1, 100], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1, "y": 1, "z": 1 }, "type": "ground", "texture": "https://www.dailysummary.io/textures/stone.jpg" },
-      { "position": { "x": 0, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": -5, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": -10, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 5, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 10, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 15, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 20, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 25, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 30, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 35, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 40, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": -15, "y": -0.2, "z": 0 }, "size": [5, 0.08, 5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 4.999997615815346, "y": 1.0000000223517422, "z": 5 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "road_drivewaySingleBarrier", "offset": { "x": 8.35000205039978, "y": 0, "z": 5.999999046325684 } },
-      { "position": { "x": 0, "y": 90, "z": 0 }, "size": [0.05, 4, 0.23], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 0.9999997615814777, "y": 5.92592582127031, "z": 1.0222204891281312 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 0, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": -5, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": -10, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": -15, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 5, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 10, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 15, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 20, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 25, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 30, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 35, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } },
-      { "position": { "x": 40, "y": 1, "z": 2.5 }, "size": [0.5, 3, 0.5], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 9.999997615814777, "y": 4.444444365952733, "z": 2.2222184546263724 }, "type": "box", "file": "https://www.dailysummary.io/models/ModularRoadKit.glb", "model": "light_curved", "offset": { "x": -0.4990909993648529, "y": 0, "z": 7 } }
-    ],
-    "healthPacks": []
-  },
-  city: {
-    "name": "City",
-    "objects": [
-      { "position": { "x": 0, "y": 92.5, "z": 0 }, "size": [814, 206, 800], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1.9993230161949644, "y": 1.9846980309968454, "z": 1.9999352713911427 }, "type": "box", "file": "https://www.dailysummary.io/models/city_highres.glb", "model": "Sketchfab_Scene", "offset": { "x": -212.53021621704102, "y": 49.25186499625598, "z": -208.66839599609375 } }
-    ],
-    "healthPacks": []
-  },
-  anotherCity: {
-    "name": "Detailed City",
-    "objects": [
-      { "position": { "x": 0, "y": 65, "z": 0 }, "size": [332, 140, 302], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1.990831431526063, "y": 1.988958187444187, "z": 1.999921682822281 }, "type": "box", "file": "https://www.dailysummary.io/models/FullCity.glb", "model": "Sketchfab_Scene", "offset": { "x": -6.283851623535156, "y": 34.458319501665684, "z": 6.247860158213669 } },
-      { "position": { "x": 0, "y": -4.5, "z": 0 }, "size": [500, 1, 500], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1, "y": 1, "z": 1 }, "type": "box", "color": "#888888", "texture": "https://www.dailysummary.io/textures/stone.jpg" }
-    ],
-    "healthPacks": []
-  },
-  npmSmart: {
-    "name": "Block town",
-    "objects": [
-      { "position": { "x": 0, "y": 30, "z": 0 }, "size": [500.15, 75, 500.15], "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 97.11650702509202, "y": 99.9998649062582, "z": 97.11650702509202 }, "type": "box", "file": "https://www.dailysummary.io/models/npcs_are_becoming_smart_map.glb", "model": "Sketchfab_Scene", "offset": { "x": 0, "y": 0.0222455019746981, "z": 0 } }
-    ],
-    "healthPacks": []
-  }
+  default: { "name": "Jump Arena" },
+  road: { "name": "Road" },
+  city: { "name": "City" },
+  anotherCity: { "name": "Detailed City" },
+  blockTown: { "name": "Block Town" }
 };
+
+export async function loadMap(name = "default") {
+  try {
+    const filePath = path.join(__dirname, 'maps', `${name}.json`);
+    const fileData = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(fileData);
+  } catch (err) {
+    console.error(`❌ Failed to load map '${name}':`, err.message);
+    return null;
+  }
+}
+// === MapSystem End ===
 
 function distanceVec3(a, b) {
   return Math.sqrt(
@@ -187,25 +98,21 @@ function segmentSphereIntersect(p1, p2, center, radius) {
 }
 
 function getAABB(obj) {
+  const cx = obj.center?.x ?? obj.position.x;
+  const cy = obj.center?.y ?? obj.position.y;
+  const cz = obj.center?.z ?? obj.position.z;
   const half = {
     x: obj.size[0] / 2,
     y: obj.size[1] / 2,
-    z: obj.size[2] / 2
+    z: obj.size[2] / 2,
   };
 
-  const min = {
-    x: obj.position.x - half.x,
-    y: obj.position.y - half.y,
-    z: obj.position.z - half.z
+  return {
+    center: [cx, cy, cz],
+    size: obj.size,
+    min: { x: cx - half.x, y: cy - half.y, z: cz - half.z },
+    max: { x: cx + half.x, y: cy + half.y, z: cz + half.z },
   };
-
-  const max = {
-    x: obj.position.x + half.x,
-    y: obj.position.y + half.y,
-    z: obj.position.z + half.z
-  };
-
-  return { min, max };
 }
 
 function rayIntersectsAABB(origin, dir, maxDist, min, max) {
@@ -231,17 +138,6 @@ function rayIntersectsAABB(origin, dir, maxDist, min, max) {
   return (hitDist >= 0 && hitDist <= maxDist) ? hitDist : null;
 }
 
-function ensureOctreeForMap(map) {
-  if (!map.octree) {
-    const bounds = computeMapBounds(map.objects);
-    const octree = new OctreeNode(bounds.center, bounds.size * 1.2);
-    for (const mesh of map.objects) {
-      octree.insert(mesh);
-    }
-    map.octree = octree;
-  }
-}
-
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
   playerLastSeen[socket.id] = Date.now();
@@ -249,7 +145,7 @@ io.on('connection', (socket) => {
   socket.on('getMaps', (callback) => {
     const availableMaps = Object.entries(maps).map(([id, map]) => ({
       id,
-      name: map.name || id
+      name: map?.name || id
     }));
     callback(availableMaps);
   });
@@ -262,7 +158,7 @@ io.on('connection', (socket) => {
     callback(availableRooms);
   });
 
-  socket.on('createRoom', ({ name, modelName, mapName }, callback) => {
+  socket.on('createRoom', async ({ name, modelName, mapName }, callback) => {
 
     // Basic input validation
     if (typeof name !== 'string' || typeof modelName !== 'string') {
@@ -274,15 +170,17 @@ io.on('connection', (socket) => {
     modelName = modelName.trim().substring(0, 64);
     const safeName = name.replace(/[^\w\s-]/g, '');
     const safeModel = modelName.replace(/[^\w.-]/g, '');
+    const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
 
     if (mapName == null) {
       mapName = 'default';
     }
-
-    const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
-
+    if (maps[mapName] == null || maps[mapName].octree == null) {
+      maps[mapName] = await loadMap(mapName);
+      const octree = OctreeNode.fromJSON(maps[mapName].octree);
+      maps[mapName].octree = octree;
+    }
     const map = maps[mapName];
-    ensureOctreeForMap(map);
 
     rooms[roomId] = {
       players: {},
@@ -476,7 +374,7 @@ io.on('connection', (socket) => {
 
     const PELLET_COUNT = 8;
     const SPREAD_ANGLE = 10; // degrees
-    const MAX_RANGE = 30;
+    const MAX_RANGE = 50;
 
     const hitsPerPlayer = {}; // accumulate damage per target
 
@@ -801,9 +699,9 @@ setInterval(() => {
 }, 1000 / 60); // 60 FPS
 
 function computeShotgunDamage(distance) {
-  if (distance < 5) return 5;
-  if (distance < 15) return 4;
-  if (distance < 30) return 2;
+  if (distance < 10) return 5;
+  if (distance < 25) return 4;
+  if (distance < 50) return 2;
   return 0;
 }
 

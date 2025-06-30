@@ -4,7 +4,7 @@
   "scripts": {
     "build": "node copy-shared.js && vite build",
     "dev": "node copy-shared.js && vite",
-    "deploy": "node deploy.js"
+    "deploy": "node copy-shared.js && npm run build && node deploy.js"
   },
   "dependencies": {
     "socket.io-client": "^4.7.2",
