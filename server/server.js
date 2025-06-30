@@ -373,13 +373,49 @@ io.on('connection', (socket) => {
     if (!room || !room.players[socket.id]) return;
 
     const PELLET_COUNT = 8;
-    const SPREAD_ANGLE = 10; // degrees
     const MAX_RANGE = 50;
+    const BASE_SPREAD_ANGLE = 10;
+    const MIN_SPREAD_ANGLE = 0;
+    const MAX_EFFECTIVE_DISTANCE = 15;
+
+    let closestPlayerDist = Infinity;
+
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (pid === socket.id) continue;
+
+      const toPlayer = {
+        x: player.position.x - origin.x,
+        y: player.position.y - origin.y,
+        z: player.position.z - origin.z
+      };
+
+      // Normalize shot direction
+      const dir = normalizeVec3(direction);
+
+      // Compute dot product
+      const dot = toPlayer.x * dir.x + toPlayer.y * dir.y + toPlayer.z * dir.z;
+
+      // If dot <= 0, player is behind the shooter — skip them
+      if (dot <= 0) continue;
+
+      // Project toPlayer vector onto the shooting direction to get distance along ray
+      const dist = dot; // since dir is normalized
+
+      if (dist < closestPlayerDist) {
+        closestPlayerDist = dist;
+      }
+    }
+
+    // Linearly interpolate spread angle based on distance to closest target
+    const clampedDist = Math.min(closestPlayerDist, MAX_EFFECTIVE_DISTANCE);
+    const t = clampedDist / MAX_EFFECTIVE_DISTANCE;
+    const ease = Math.pow(t, 4.0); // more aggressive (try 2.0 for even tighter close shots)
+    let spreadAngle = MIN_SPREAD_ANGLE + ease * (BASE_SPREAD_ANGLE - MIN_SPREAD_ANGLE);
 
     const hitsPerPlayer = {}; // accumulate damage per target
 
     for (let i = 0; i < PELLET_COUNT; i++) {
-      const pelletDir = getSpreadDirection(direction, SPREAD_ANGLE);
+      const pelletDir = getSpreadDirection(direction, spreadAngle);
       let nearestWallDist = Infinity;
       let wallHitPos = null;
 
@@ -403,7 +439,7 @@ io.on('connection', (socket) => {
       let hitPlayerId = null;
       let hitPlayerPos = null;
 
-      const playerHalfSize = { x: 0.4, y: 0.9, z: 0.4 };
+      const playerHalfSize = { x: 0.7, y: 1.6, z: 0.7 };
 
       for (const [pid, player] of Object.entries(room.players)) {
         if (pid === socket.id) continue;
@@ -699,7 +735,7 @@ setInterval(() => {
 }, 1000 / 60); // 60 FPS
 
 function computeShotgunDamage(distance) {
-  if (distance < 10) return 5;
+  if (distance < 15) return 5;
   if (distance < 25) return 4;
   if (distance < 50) return 2;
   return 0;
@@ -709,20 +745,22 @@ function toVector3(obj) {
   return new THREE.Vector3(obj.x, obj.y, obj.z);
 }
 
-function getSpreadDirection(baseDir, spreadAngleDeg) {
+function getSpreadDirection(baseDir, spreadAngleDeg, downwardBias = 3) {
   const spreadAngleRad = THREE.MathUtils.degToRad(spreadAngleDeg);
   const randomAngle = Math.random() * 2 * Math.PI;
   const randomRadius = Math.random() * Math.tan(spreadAngleRad);
 
-  // Get orthogonal basis to baseDir
+  // Base direction (normalized)
   const dir = toVector3(baseDir).clone().normalize();
+
+  // Create an orthonormal basis around baseDir
   const up = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
   const right = new THREE.Vector3().crossVectors(up, dir).normalize();
   const upOrtho = new THREE.Vector3().crossVectors(dir, right).normalize();
 
-  // Offset direction in a cone
+  // Add downward bias by scaling upOrtho slightly more negative
   const offset = right.multiplyScalar(Math.cos(randomAngle) * randomRadius)
-    .add(upOrtho.multiplyScalar(Math.sin(randomAngle) * randomRadius));
+    .add(upOrtho.multiplyScalar(Math.sin(randomAngle) * randomRadius * (1 + downwardBias)));
 
   const spreadDir = dir.clone().add(offset).normalize();
   return spreadDir;
