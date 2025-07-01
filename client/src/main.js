@@ -15,12 +15,16 @@ const scene = new THREE.Scene();
 const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer();
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+const ambient = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambient);
 
 const directional = new THREE.DirectionalLight(0xffffff, 1);
 directional.position.set(5, 10, 7);
 scene.add(directional);
+
+const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+fill.position.set(-5, -10, -7);
+scene.add(fill);
 
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 
@@ -34,6 +38,9 @@ window.addEventListener('resize', () => {
     CameraSystem.getHudCamera().updateProjectionMatrix();
     UISystem.updateCrosshairPosition();
 });
+
+const PLAYER_CAPSULE_RADIUS = 0.3;
+const PLAYER_CAPSULE_HEIGHT = 1.2;
 
 // === InputSystem Start ===
 const InputSystem = (() => {
@@ -1784,7 +1791,7 @@ const GrappleSystem = (() => {
 // === PlayerSystem Begin ===
 const PlayerSystem = (() => {
     const GRAVITY = -20.8;
-    const GRAVITY_TERMINAL_VELOCITY = -50;
+    const GRAVITY_TERMINAL_VELOCITY = -150;
     const JUMP_SPEED = 12;
     const MOVE_SPEED = 7;
     const DEBUG_ARROW_SCALE = 2.0;
@@ -1838,20 +1845,25 @@ const PlayerSystem = (() => {
 
         const speed = velocity.length();
         const moveDistance = speed * delta;
-        const maxStepDistance = 0.2;
+        let maxStepDistance = gameState.requiresPrecisePhysics ? 0.02 : 0.1;
 
         const steps = Math.ceil(moveDistance / maxStepDistance);
-        const clampedSteps = Math.min(Math.max(steps, 1), 20);
+        const clampedSteps = Math.min(Math.max(steps, 1), 50);
         const subDelta = delta / clampedSteps;
 
+        const startPhysic = performance.now();
         for (let i = 0; i < clampedSteps; i++) {
             const start = performance.now();
             updatePhysicsStep(subDelta, octree);
             const end = performance.now();
 
-            if (end - start > 10) {
+            if (end - start > 5) {
                 console.warn(`UpdatePhysicsStep (step ${i + 1}/${clampedSteps}): ${(end - start).toFixed(2)} ms`);
             }
+        }
+        const endPhysic = performance.now();
+        if (endPhysic - startPhysic > 10) {
+            console.warn(`UpdatePhysics: ${(endPhysic - startPhysic).toFixed(2)} ms`);
         }
     }
 
@@ -2004,8 +2016,6 @@ const PlayerSystem = (() => {
 
         if (movementLength < 0.001) return false;
 
-        const movementDir = movement.normalize();
-
         // Check multiple points along the movement path
         const samples = Math.max(3, Math.ceil(movementLength / 0.05));
 
@@ -2038,7 +2048,7 @@ const PlayerSystem = (() => {
             scene.add(new THREE.ArrowHelper(rayDown, vecRayOrigin, 0.6 * DEBUG_ARROW_SCALE, 0x0000ff));
         }
 
-        const rayDistance = PLAYER_HEIGHT + (PLAYER_HEIGHT / 5.0);
+        const rayDistance = 0.5 + PLAYER_HEIGHT + (PLAYER_HEIGHT / 5.0);
         const downCandidates = octree.queryRay(vecRayOrigin, rayDown, rayDistance);
         raycaster.set(vecRayOrigin, rayDown);
         raycaster.far = rayDistance;
@@ -2055,18 +2065,14 @@ const PlayerSystem = (() => {
         }
 
         if (closestHit) {
-            const surfaceNormal = closestHit.face?.normal || new THREE.Vector3(0, 1, 0);
-            const slopeAngle = Math.acos(Math.max(0, Math.min(1, surfaceNormal.dot(new THREE.Vector3(0, 1, 0)))));
-            const maxSlopeAngle = Math.PI / 4;
-
             const distanceToGround = closestHit.distance;
             const isMovingDown = velocity.y <= 0.1;
 
-            if (isMovingDown && distanceToGround < PLAYER_HEIGHT) {
+            if (isMovingDown && distanceToGround < rayDistance) {
                 isGrounded = true;
 
                 // Snap to ground if very close and slow
-                if (distanceToGround < PLAYER_HEIGHT && velocity.length() < 1.0) {
+                if (distanceToGround < rayDistance && velocity.length() < 1.0) {
                     const targetY = closestHit.point.y + PLAYER_HALF_HEIGHT;
                     me.position.y = targetY;
                     velocity.y = 0;
@@ -2075,7 +2081,6 @@ const PlayerSystem = (() => {
             else {
                 isGrounded = false;
             }
-
         }
         else {
             isGrounded = false;
@@ -2193,8 +2198,8 @@ const PlayerSystem = (() => {
     }
 
     function getPlayerCapsule(player) {
-        const radius = player.userData.capsule?.radius || 0.3;
-        const height = player.userData.capsule?.height || 1.0;
+        const radius = player.userData.capsule?.radius || PLAYER_CAPSULE_RADIUS;
+        const height = player.userData.capsule?.height || PLAYER_CAPSULE_HEIGHT;
 
         // Player position is at capsule center (half-height)
         const center = player.position.clone();
@@ -2676,7 +2681,10 @@ const GameSystem = (() => {
         const playerObj = addPlayer(pid, 0, 0, 0, playerName, modelName);
         gameStarted = true;
 
-        const gameState = new GameState({ roomId, playerId: pid, playerObj, octree: MapSystem.getOctree(), players: players });
+        const gameState = new GameState({
+            roomId, playerId: pid, playerObj,
+            octree: MapSystem.getOctree(), players: players, requiresPrecisePhysics: MapSystem.isRequiringPrecisePhysics()
+        });
         EventBus.emit("game:started", gameState);
         EventBus.emit("player:healthChanged", { playerId: pid, health });
     }
@@ -2719,7 +2727,10 @@ const GameSystem = (() => {
         const playerObj = addPlayer(pid, 0, 0, 0, playerName, modelName);
         gameStarted = true;
 
-        const gameState = new GameState({ roomId, playerId: pid, playerObj, octree: MapSystem.getOctree(), players: players });
+        const gameState = new GameState({
+            roomId, playerId: pid, playerObj,
+            octree: MapSystem.getOctree(), players: players, requiresPrecisePhysics: MapSystem.isRequiringPrecisePhysics()
+        });
         EventBus.emit("game:started", gameState);
         EventBus.emit("player:healthChanged", { playerId: pid, health });
     }
@@ -2745,8 +2756,8 @@ const GameSystem = (() => {
         group.position.set(x, y, z);
         group.name = name;
 
-        const capsuleHeight = 1.2;
-        const capsuleRadius = 0.3;
+        const capsuleHeight = PLAYER_CAPSULE_HEIGHT;
+        const capsuleRadius = PLAYER_CAPSULE_RADIUS;
 
         group.userData.capsule = { radius: capsuleRadius, height: capsuleHeight };
 

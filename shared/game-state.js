@@ -1,10 +1,11 @@
 export class GameState {
-  constructor({ roomId = null, playerId = null, playerObj = null, octree = null, players = null } = {}) {
+  constructor({ roomId = null, playerId = null, playerObj = null, octree = null, players = null, requiresPrecisePhysics = false } = {}) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.playerObj = playerObj;
     this.octree = octree;
     this.players = players;
+    this.requiresPrecisePhysics = requiresPrecisePhysics;
   }
 
   clear() {
@@ -13,6 +14,7 @@ export class GameState {
     this.playerObj = null;
     this.octree = null;
     this.players = null;
+    this.requiresPrecisePhysics = false;
   }
 
   isValid() {

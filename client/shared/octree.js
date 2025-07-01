@@ -194,15 +194,26 @@ export class OctreeNode {
             }
         }
 
-        const dfs = (i, group) => {
-            if (visited.has(i)) return;
-            visited.add(i);
-            const tri = triangles[i];
-            group.push(tri);
-            for (const v of tri) {
-                const key = vertexKey(v);
-                for (const neighborIndex of vertexMap.get(key)) {
-                    dfs(neighborIndex, group);
+        const dfsIterative = (startIndex, group) => {
+            const stack = [startIndex];
+
+            while (stack.length > 0) {
+                const i = stack.pop();
+                if (visited.has(i)) continue;
+
+                visited.add(i);
+                const tri = triangles[i];
+                group.push(tri);
+
+                for (const v of tri) {
+                    const key = vertexKey(v);
+                    const neighbors = vertexMap.get(key) || [];
+
+                    for (const neighborIndex of neighbors) {
+                        if (!visited.has(neighborIndex)) {
+                            stack.push(neighborIndex);
+                        }
+                    }
                 }
             }
         };
@@ -210,14 +221,13 @@ export class OctreeNode {
         for (let i = 0; i < triangles.length; i++) {
             if (!visited.has(i)) {
                 const group = [];
-                dfs(i, group);
+                dfsIterative(i, group);
                 groups.push(group);
             }
         }
 
         return groups;
     }
-
 
     triangleCenter([a, b, c]) {
         return a.clone().add(b).add(c).multiplyScalar(1 / 3);

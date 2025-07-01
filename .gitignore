@@ -6,3 +6,4 @@ client/.env.deploy
 client/shared/
 server/shared/
 mapEditor/shared/
+mapEditor/maps/export/

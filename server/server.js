@@ -29,10 +29,12 @@ const activeLasers = {}; // roomId -> [{ id, shooterId, origin, direction, posit
 // === MapSystem Begin ===
 const maps = {
   default: { "name": "Jump Arena" },
-  road: { "name": "Road" },
+  //road: { "name": "Road" },
   city: { "name": "City" },
   anotherCity: { "name": "Detailed City" },
-  blockTown: { "name": "Block Town" }
+  giganticCity: { "name": "Gigantic City" },
+  blockTown: { "name": "Block Town" },
+  //q2dm1: { "name": "Q2DM1" }
 };
 
 export async function loadMap(name = "default") {

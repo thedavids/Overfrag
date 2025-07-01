@@ -5,10 +5,15 @@ import { OctreeNode, computeMapBounds } from './octree.js';
 import { ModelsDictionary } from './models-dictionary.js';
 import { TexturesDictionary } from './textures-dictionary.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 // === MapSystem Begin ===
 export function createMapSystem({ scene, isHeadless = false }) {
+    const THIN_GEOMETRY_THRESHOLD = 0.01;
+
     const mapObjects = [];
     const healthPacks = [];
 
@@ -21,6 +26,7 @@ export function createMapSystem({ scene, isHeadless = false }) {
 
     let mapLoaded = false;
     let octree = null;
+    let requiresPrecisePhysics = false;
 
     async function loadMap(rawMapData) {
         clearMap();
@@ -38,8 +44,6 @@ export function createMapSystem({ scene, isHeadless = false }) {
 
         if (isHeadless !== true) {
             buildOctree(mapObjects);
-            //octree = OctreeNode.fromJSON(mapData.octree);
-            //octree.draw(scene);
         }
         else {
             octree = OctreeNode.fromJSON(mapData.octree);
@@ -94,6 +98,10 @@ export function createMapSystem({ scene, isHeadless = false }) {
                 flattened.geometry.disposeBoundsTree = disposeBoundsTree;
                 flattened.geometry.computeBoundsTree();
 
+                if (requiresPrecisePhysics === false) {
+                    requiresPrecisePhysics = isMeshThinViaBVH(flattened, THIN_GEOMETRY_THRESHOLD);
+                }
+
                 const box = flattened.geometry.boundingBox.clone().applyMatrix4(flattened.matrixWorld);
                 const size = new THREE.Vector3();
                 box.getSize(size);
@@ -144,6 +152,10 @@ export function createMapSystem({ scene, isHeadless = false }) {
         mesh.geometry.computeBoundsTree = computeBoundsTree;
         mesh.geometry.disposeBoundsTree = disposeBoundsTree;
         mesh.geometry.computeBoundsTree();
+
+        if (requiresPrecisePhysics === false) {
+            requiresPrecisePhysics = isMeshThinViaBVH(mesh, THIN_GEOMETRY_THRESHOLD);
+        }
 
         const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
         const size = new THREE.Vector3();
@@ -241,6 +253,15 @@ export function createMapSystem({ scene, isHeadless = false }) {
         healthPacks.length = 0;
         octree = null;
         mapLoaded = false;
+        requiresPrecisePhysics = false;
+    }
+
+    function isMeshThinViaBVH(mesh, threshold) {
+        const bbox = mesh.geometry.boundingBox;
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const min = Math.min(size.x, size.y, size.z);
+        return (min < threshold);
     }
 
     return {
@@ -250,6 +271,7 @@ export function createMapSystem({ scene, isHeadless = false }) {
         getOctree: () => octree,
         getHealthPacks: () => healthPacks,
         isLoaded: () => mapLoaded,
+        isRequiringPrecisePhysics: () => requiresPrecisePhysics,
         healthPackTaken,
         healthPackRespawned,
         update

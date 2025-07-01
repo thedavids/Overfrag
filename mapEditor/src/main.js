@@ -6,7 +6,6 @@ import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree } fro
 
 let scene, camera, renderer, selected = null;
 let keys = {}, pitch = 0, yaw = 0;
-const velocity = new THREE.Vector3();
 let prev = performance.now();
 let overlayMode = "";
 let copiedObjectData = null;
@@ -27,6 +26,13 @@ function init() {
 
     const light = new THREE.HemisphereLight(0xffffff, 0x444444);
     scene.add(light);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+    
+    const directional = new THREE.DirectionalLight(0xffffff, 1);
+    directional.position.set(5, 10, 7);
+    scene.add(directional);
 
     // grid on XZ plane
     const gridSize = 1000;   // Overall size of the grid
@@ -209,14 +215,6 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function addTestObjects() {
-    const map = [
-        { type: "box", position: { x: 0, y: 0, z: 0 }, size: [4, 1, 4], color: "#ff0000" },
-        { type: "box", position: { x: 6, y: 0, z: 0 }, size: [4, 1, 4], color: "#00ff00" },
-    ];
-    map.forEach(obj => createMapObject(obj, true));
 }
 
 async function createMapObject(obj, editable = false) {
