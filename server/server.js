@@ -176,9 +176,9 @@ io.on('connection', (socket) => {
 
     let map = null;
     if (safeName === 'q2dm1') {
-        map = await loadMap(safeName);
-        const octree = OctreeNode.fromJSON(map.octree);
-        map.octree = octree;
+      map = await loadMap(safeName);
+      const octree = OctreeNode.fromJSON(map.octree);
+      map.octree = octree;
     }
     else {
       if (mapName == null) {
@@ -201,7 +201,8 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
     console.warn(`Player ${safeName} created room`, socket.id);
-    socket.emit("loadMap", rooms[roomId].map);
+    const { octree, ...mapWithoutOctree } = rooms[roomId].map;
+    socket.emit("loadMap", mapWithoutOctree);
     callback({ roomId, health: 100 });
     io.to(roomId).emit('playerList', rooms[roomId].players);
   });
@@ -223,7 +224,8 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
     console.warn(`Player ${safeName} joined room`, socket.id);
-    socket.emit("loadMap", rooms[roomId].map);
+    const { octree, ...mapWithoutOctree } = rooms[roomId].map;
+    socket.emit("loadMap", mapWithoutOctree);
     callback({ success: true, health: 100 });
     io.to(roomId).emit('playerList', rooms[roomId].players);
     sendMessage(roomId, safeName + ' joined the game.');
