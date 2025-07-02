@@ -1854,9 +1854,10 @@ const PlayerSystem = (() => {
         const startPhysic = performance.now();
         for (let i = 0; i < clampedSteps; i++) {
             const start = performance.now();
-            updatePhysicsStep(subDelta, octree);
-            const end = performance.now();
 
+            updatePhysicsStep(subDelta, octree);
+            
+            const end = performance.now();
             if (end - start > 5) {
                 console.warn(`UpdatePhysicsStep (step ${i + 1}/${clampedSteps}): ${(end - start).toFixed(2)} ms`);
             }
@@ -2926,11 +2927,10 @@ const animate = () => {
     };
 
     const octree = MapSystem.getOctree();
-    const mapObjects = MapSystem.getMapObjects();
 
     GrappleSystem.update(delta, PlayerSystem.getVelocity(), octree);
 
-    PlayerSystem.update(delta, octree, mapObjects);
+    PlayerSystem.update(delta, octree);
 
     WeaponSystem.update();
 

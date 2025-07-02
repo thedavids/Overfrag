@@ -174,15 +174,23 @@ io.on('connection', (socket) => {
     const safeModel = modelName.replace(/[^\w.-]/g, '');
     const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
 
-    if (mapName == null) {
-      mapName = 'default';
+    let map = null;
+    if (safeName === 'q2dm1') {
+        map = await loadMap(safeName);
+        const octree = OctreeNode.fromJSON(map.octree);
+        map.octree = octree;
     }
-    if (maps[mapName] == null || maps[mapName].octree == null) {
-      maps[mapName] = await loadMap(mapName);
-      const octree = OctreeNode.fromJSON(maps[mapName].octree);
-      maps[mapName].octree = octree;
+    else {
+      if (mapName == null) {
+        mapName = 'default';
+      }
+      if (maps[mapName] == null || maps[mapName].octree == null) {
+        maps[mapName] = await loadMap(mapName);
+        const octree = OctreeNode.fromJSON(maps[mapName].octree);
+        maps[mapName].octree = octree;
+      }
+      map = maps[mapName];
     }
-    const map = maps[mapName];
 
     rooms[roomId] = {
       players: {},
@@ -192,7 +200,7 @@ io.on('connection', (socket) => {
 
     socket.join(roomId);
     rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
-    console.warn("Player created room", socket.id);
+    console.warn(`Player ${safeName} created room`, socket.id);
     socket.emit("loadMap", rooms[roomId].map);
     callback({ roomId, health: 100 });
     io.to(roomId).emit('playerList', rooms[roomId].players);
@@ -214,7 +222,7 @@ io.on('connection', (socket) => {
 
     socket.join(roomId);
     rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
-    console.warn("Player joined room", socket.id);
+    console.warn(`Player ${safeName} joined room`, socket.id);
     socket.emit("loadMap", rooms[roomId].map);
     callback({ success: true, health: 100 });
     io.to(roomId).emit('playerList', rooms[roomId].players);
@@ -533,10 +541,11 @@ function handleDisconnect(socket) {
       if (activeLasers[roomId]) {
         activeLasers[roomId] = activeLasers[roomId].filter(l => l.shooterId !== socket.id);
       }
-      sendMessage(roomId, rooms[roomId].players[socket.id].name + ' left the game.');
+      const name = rooms[roomId].players[socket.id].name;
+      sendMessage(roomId, name + ' left the game.');
       delete rooms[roomId].players[socket.id];
       io.to(roomId).emit('playerDisconnected', socket.id);
-      console.log(`Client disconnected: ${socket.id}`);
+      console.log(`Client disconnected: ${name} ${socket.id}`);
       if (Object.keys(rooms[roomId].players).length === 0) {
         delete activeLasers[roomId];
         delete rooms[roomId]?.octree;
@@ -568,9 +577,11 @@ setInterval(() => {
 function cleanupStalePlayer(id) {
   for (const roomId in rooms) {
     if (rooms[roomId].players[id]) {
+      const name = rooms[roomId].players[id].name;
       delete rooms[roomId].players[id];
+      sendMessage(roomId, name + ' left the game.');
       io.to(roomId).emit('playerDisconnected', id);
-      console.log(`Client disconnected: ${socket.id}`);
+      console.log(`Client disconnected: ${name} ${id}`);
       if (Object.keys(rooms[roomId].players).length === 0) {
         delete activeLasers[roomId];
         delete rooms[roomId];

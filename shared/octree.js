@@ -323,6 +323,7 @@ export class OctreeNode {
     }
 
     queryCapsule(capsule, result = [], filterFn = null) {
+        const start = performance.now();
         const r = capsule.radius;
         const padding = 0.5; // small epsilon to catch borderline overlaps
 
@@ -339,10 +340,16 @@ export class OctreeNode {
             }
         };
 
-        return this.queryRange(capsuleAABB, result, filterFn);
+        const query = this.queryRange(capsuleAABB, result, filterFn);
+        const end = performance.now();
+        if (end - start > 1) {
+            console.warn(`queryCapsule: ${(end - start).toFixed(2)} ms`);
+        }
+        return query;
     }
 
     queryRay(origin, direction, maxDist, result = [], filterFn = null) {
+        const start = performance.now();
         const end = {
             x: origin.x + direction.x * maxDist,
             y: origin.y + direction.y * maxDist,
@@ -362,7 +369,12 @@ export class OctreeNode {
             }
         };
 
-        return this.queryRange(range, result, filterFn);
+        const query = this.queryRange(range, result, filterFn);
+        const timeEnd = performance.now();
+        if (timeEnd - start > 1) {
+            console.warn(`queryRay: ${(timeEnd - start).toFixed(2)} ms`);
+        }
+        return query;
     }
 
     querySphere(center, radius, result = [], filterFn = null) {
