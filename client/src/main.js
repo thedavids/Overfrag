@@ -1856,7 +1856,7 @@ const PlayerSystem = (() => {
             const start = performance.now();
 
             updatePhysicsStep(subDelta, octree);
-            
+
             const end = performance.now();
             if (end - start > 5) {
                 console.warn(`UpdatePhysicsStep (step ${i + 1}/${clampedSteps}): ${(end - start).toFixed(2)} ms`);
@@ -1892,16 +1892,13 @@ const PlayerSystem = (() => {
         // 4. Grapple momentum handling
         GrappleSystem.updatePhysic(delta, player, velocity, moveDir, MOVE_SPEED, isGrounded);
 
-        // 5. Store position for collision recovery
-        const originalPosition = player.position.clone();
+        // 5. Collision-aware movement
+        performIntegratedMovement(player, delta, octree);
 
-        // 6. Collision-aware movement
-        performIntegratedMovement(player, delta, octree, originalPosition);
-
-        // 7. Ground detection
+        // 6. Ground detection
         checkGroundCollision(octree, player);
 
-        // 8. Emit movement events
+        // 7. Emit movement events
         const isIdle =
             isGrounded &&
             moveDir.lengthSq() === 0 &&
@@ -1942,68 +1939,96 @@ const PlayerSystem = (() => {
         return vecMoveDir;
     }
 
-    function performIntegratedMovement(me, delta, octree, originalPosition) {
-        const intendedMovement = velocity.clone().multiplyScalar(delta);
-        const movementMagnitude = intendedMovement.length();
+    // Preallocated vectors
+    const _intendedMovement = new THREE.Vector3();
+    const _stepMovement = new THREE.Vector3();
+    const _stepStartPos = new THREE.Vector3();
+    const _horizontalVelocity = new THREE.Vector3();
+    const _collisionNormal = new THREE.Vector3();
+    const _remainingMovement = new THREE.Vector3();
+    const _tempHorizontal = new THREE.Vector3();
+    const _pushResult = new THREE.Vector3();
+
+    function performIntegratedMovement(me, delta, octree) {
+
+        _intendedMovement.copy(velocity).multiplyScalar(delta);
+        const movementMagnitude = _intendedMovement.length();
 
         if (movementMagnitude < 0.001) return;
 
+        if (movementMagnitude < 0.01) {
+            me.position.add(_intendedMovement);
+
+            const tCapsule = performance.now();
+            const capsule = getPlayerCapsule(me);
+            const nearby = octree.queryCapsule(capsule);
+            const tQuery = performance.now();
+
+            if (nearby.length > 0) {
+                const pushResult = resolveCapsulePenetration(capsule, nearby);
+                if (pushResult) {
+                    me.position.add(pushResult);
+                }
+            }
+            return;
+        }
+
         const maxStepSize = 0.1;
         const steps = Math.max(1, Math.ceil(movementMagnitude / maxStepSize));
-        const stepMovement = intendedMovement.clone().divideScalar(steps);
+        _stepMovement.copy(_intendedMovement).divideScalar(steps);
 
         for (let step = 0; step < steps; step++) {
-            const stepStartPos = me.position.clone();
-            const horizontalVelocity = new THREE.Vector3(velocity.x, 0, velocity.z); // preserve XZ
 
-            me.position.add(stepMovement);
+            _stepStartPos.copy(me.position);
+            _horizontalVelocity.set(velocity.x, 0, velocity.z);
+            me.position.add(_stepMovement);
 
             const capsule = getPlayerCapsule(me);
             const nearby = octree.queryCapsule(capsule);
 
             if (nearby.length > 0) {
-                const pushResult = resolveCapsulePenetration(capsule, nearby);
+                const push = resolveCapsulePenetration(capsule, nearby);
 
-                if (pushResult && pushResult.length() > 0.001) {
-                    me.position.add(pushResult);
+                if (push && push.length() > 0.001) {
 
-                    const collisionNormal = pushResult.clone().normalize();
+                    _pushResult.copy(push);
+                    me.position.add(_pushResult);
+
+                    _collisionNormal.copy(_pushResult).normalize();
                     const remainingSteps = steps - step - 1;
 
                     if (remainingSteps > 0) {
-                        const remainingMovement = stepMovement.clone().multiplyScalar(remainingSteps);
-                        remainingMovement.projectOnPlane(collisionNormal);
-                        me.position.add(remainingMovement);
+                        _remainingMovement.copy(_stepMovement).multiplyScalar(remainingSteps);
+                        _remainingMovement.projectOnPlane(_collisionNormal);
+                        me.position.add(_remainingMovement);
                     }
 
-                    // Project only horizontal velocity, keep vertical
-                    const isGentleSlope = collisionNormal.y > GROUND_SLOPE_THRESHOLD;
+                    const isGentleSlope = _collisionNormal.y > GROUND_SLOPE_THRESHOLD;
 
                     if (isGentleSlope) {
-                        velocity.x = horizontalVelocity.x;
-                        velocity.z = horizontalVelocity.z;
-                    }
-                    else {
-                        const horizontal = new THREE.Vector3(horizontalVelocity.x, 0, horizontalVelocity.z);
-                        horizontal.projectOnPlane(collisionNormal);
-                        velocity.x = horizontal.x;
-                        velocity.z = horizontal.z;
+                        velocity.x = _horizontalVelocity.x;
+                        velocity.z = _horizontalVelocity.z;
+                    } else {
+                        _tempHorizontal.set(_horizontalVelocity.x, 0, _horizontalVelocity.z);
+                        _tempHorizontal.projectOnPlane(_collisionNormal);
+                        velocity.x = _tempHorizontal.x;
+                        velocity.z = _tempHorizontal.z;
                     }
 
-                    // Mark grounded only on gentle slopes
                     if (isGentleSlope) {
                         isGrounded = true;
                         velocity.y = Math.max(0, velocity.y);
                     }
-
                     break;
                 }
             }
 
-            // swept capsule check for tunnels
+            // only measure when applicable
             if (step === 0 && movementMagnitude > 0.05) {
-                if (performSweptCapsuleCheck(stepStartPos, me.position, capsule.radius, octree)) {
-                    me.position.copy(stepStartPos);
+                const collided = performSweptCapsuleCheck(_stepStartPos, me.position, capsule.radius, octree);
+
+                if (collided) {
+                    me.position.copy(_stepStartPos);
                     velocity.multiplyScalar(0.5);
                     break;
                 }
@@ -2011,35 +2036,169 @@ const PlayerSystem = (() => {
         }
     }
 
+    const _SweptMin = new THREE.Vector3();
+    const _SweptMax = new THREE.Vector3();
+    const _SweptSamplePos = new THREE.Vector3();
+    const _TempCapsuleStart = new THREE.Vector3();
+    const _TempCapsuleEnd = new THREE.Vector3();
+
     function performSweptCapsuleCheck(startPos, endPos, capsuleRadius, octree) {
         const movement = endPos.clone().sub(startPos);
         const movementLength = movement.length();
 
         if (movementLength < 0.001) return false;
 
-        // Check multiple points along the movement path
-        const samples = Math.max(3, Math.ceil(movementLength / 0.05));
+        // === 1. Compute bounding box using preallocated vectors ===
+        _SweptMin.set(
+            Math.min(startPos.x, endPos.x),
+            Math.min(startPos.y, endPos.y),
+            Math.min(startPos.z, endPos.z)
+        ).addScalar(-capsuleRadius);
+
+        _SweptMax.set(
+            Math.max(startPos.x, endPos.x),
+            Math.max(startPos.y, endPos.y),
+            Math.max(startPos.z, endPos.z)
+        ).addScalar(capsuleRadius);
+
+        const sweepAABB = { min: _SweptMin, max: _SweptMax };
+
+        // === 2. Query once ===
+        const nearby = octree.queryRange(sweepAABB);
+
+        // === 3. Sample along path ===
+        const samples = Math.min(5, Math.max(3, Math.ceil(movementLength / 0.1)));
 
         for (let i = 1; i <= samples; i++) {
-            const t = i / samples;
-            const samplePos = startPos.clone().lerp(endPos, t);
 
-            // Create temporary capsule at sample position
+            const t = i / samples;
+            _SweptSamplePos.copy(startPos).lerp(endPos, t);
+
+            _TempCapsuleStart.copy(_SweptSamplePos).addScalar(0).y += -0.5 + capsuleRadius;
+            _TempCapsuleEnd.copy(_SweptSamplePos).addScalar(0).y += 0.5 - capsuleRadius;
+
             const tempCapsule = {
-                start: samplePos.clone().add(new THREE.Vector3(0, -0.5 + capsuleRadius, 0)),
-                end: samplePos.clone().add(new THREE.Vector3(0, 0.5 - capsuleRadius, 0)),
+                start: _TempCapsuleStart,
+                end: _TempCapsuleEnd,
                 radius: capsuleRadius
             };
 
-            const nearby = octree.queryCapsule(tempCapsule);
-            if (nearby.length > 0) {
-                const penetration = resolveCapsulePenetration(tempCapsule, nearby);
+            for (const obj of nearby) {
+                const penetration = resolveCapsulePenetration(tempCapsule, [obj]);
+
                 if (penetration && penetration.length() > 0.01) {
-                    return true; // Collision detected
+                    return true;
                 }
             }
         }
+
         return false;
+    }
+
+    const _capsuleLine = new THREE.Line3();
+    const _closestPointBox = new THREE.Vector3();
+    const _closestPointLine = new THREE.Vector3();
+
+    function resolveCapsulePenetration(capsule, objects) {
+        const allPushVectors = [];
+
+        for (const obj of objects) {
+            const geometry = obj.geometry;
+            const bvh = geometry?.boundsTree;
+            if (!bvh) continue;
+
+            if (!obj._cachedInvMatrix || !obj._cachedNormalMatrix || obj._matrixWorldNeedsUpdate) {
+                obj._cachedInvMatrix = obj.matrixWorld.clone().invert();
+                obj._cachedNormalMatrix = new THREE.Matrix3().getNormalMatrix(obj.matrixWorld);
+            }
+
+            const localCapsule = {
+                start: capsule.start.clone().applyMatrix4(obj._cachedInvMatrix),
+                end: capsule.end.clone().applyMatrix4(obj._cachedInvMatrix),
+                radius: capsule.radius
+            };
+
+            bvh.shapecast({
+                intersectsBounds: (box) => {
+                    _capsuleLine.start.copy(localCapsule.start);
+                    _capsuleLine.end.copy(localCapsule.end);
+                    box.clampPoint(_capsuleLine.start, _closestPointBox);
+                    _capsuleLine.closestPointToPoint(_closestPointBox, true, _closestPointLine);
+                    return _closestPointLine.distanceToSquared(_closestPointBox) <= localCapsule.radius ** 2;
+                },
+
+                intersectsTriangle: (tri) => {
+                    const result = capsuleIntersectsTriangle(localCapsule, tri);
+                    if (result?.pushOut && result.pushOut.lengthSq() > 1e-6) {
+                        const worldPush = result.pushOut.clone().applyMatrix3(obj._cachedNormalMatrix);
+                        allPushVectors.push(worldPush);
+                    }
+                }
+            });
+        }
+
+        if (allPushVectors.length === 0) {
+            return new THREE.Vector3();
+        }
+
+        // Combine push vectors intelligently
+        let totalPush = new THREE.Vector3();
+
+        // Sort by magnitude - prioritize larger pushes
+        allPushVectors.sort((a, b) => b.lengthSq() - a.lengthSq());
+
+        // Use the strongest push as primary, blend in others
+        totalPush.copy(allPushVectors[0]);
+
+        for (let i = 1; i < allPushVectors.length; i++) {
+            const weight = Math.min(0.5, allPushVectors[i].length() / allPushVectors[0].length());
+            totalPush.add(allPushVectors[i].clone().multiplyScalar(weight));
+        }
+
+        // Cap the push to prevent explosive behavior
+        const maxPush = 0.5;
+        if (totalPush.length() > maxPush) {
+            totalPush.setLength(maxPush);
+        }
+
+        return totalPush;
+    }
+
+    // Scratch vectors (defined once, reused across calls)
+    const _closestTriPointStart = new THREE.Vector3();
+    const _closestTriPointEnd = new THREE.Vector3();
+    const _closestTriPoint = new THREE.Vector3();
+    const _closestOnSegment = new THREE.Vector3();
+    const _distVec = new THREE.Vector3();
+
+    function capsuleIntersectsTriangle(capsule, triangle) {
+        _capsuleLine.start.copy(capsule.start);
+        _capsuleLine.end.copy(capsule.end);
+
+        triangle.closestPointToPoint(capsule.start, _closestTriPointStart);
+        triangle.closestPointToPoint(capsule.end, _closestTriPointEnd);
+
+        const dStart = capsule.start.distanceToSquared(_closestTriPointStart);
+        const dEnd = capsule.end.distanceToSquared(_closestTriPointEnd);
+
+        if (dStart < dEnd) {
+            _closestTriPoint.copy(_closestTriPointStart);
+        } else {
+            _closestTriPoint.copy(_closestTriPointEnd);
+        }
+
+        _capsuleLine.closestPointToPoint(_closestTriPoint, true, _closestOnSegment);
+        _distVec.copy(_closestOnSegment).sub(_closestTriPoint);
+
+        const distSq = _distVec.lengthSq();
+
+        if (distSq < capsule.radius * capsule.radius) {
+            const depth = capsule.radius - Math.sqrt(distSq);
+            const pushOut = _distVec.normalize().multiplyScalar(depth);
+            return { pushOut };
+        }
+
+        return null;
     }
 
     function checkGroundCollision(octree, me) {
@@ -2088,70 +2247,6 @@ const PlayerSystem = (() => {
         }
     }
 
-    function resolveCapsulePenetration(capsule, objects) {
-        const allPushVectors = [];
-
-        for (const obj of objects) {
-            const geometry = obj.geometry;
-            const bvh = geometry?.boundsTree;
-            if (!bvh) continue;
-
-            const invMatrix = obj.matrixWorld.clone().invert();
-            const normalMatrix = new THREE.Matrix3().getNormalMatrix(obj.matrixWorld);
-
-            const localCapsule = {
-                start: capsule.start.clone().applyMatrix4(invMatrix),
-                end: capsule.end.clone().applyMatrix4(invMatrix),
-                radius: capsule.radius
-            };
-
-            bvh.shapecast({
-                intersectsBounds: (box) => {
-                    const closestPointBox = new THREE.Vector3();
-                    const closestPointLine = new THREE.Vector3();
-                    const capsuleLine = new THREE.Line3(localCapsule.start, localCapsule.end);
-                    box.clampPoint(capsuleLine.start, closestPointBox);
-                    capsuleLine.closestPointToPoint(closestPointBox, true, closestPointLine);
-                    return closestPointLine.distanceToSquared(closestPointBox) <= localCapsule.radius ** 2;
-                },
-
-                intersectsTriangle: (tri) => {
-                    const result = capsuleIntersectsTriangle(localCapsule, tri);
-                    if (result?.pushOut && result.pushOut.lengthSq() > 1e-6) {
-                        const worldPush = result.pushOut.clone().applyMatrix3(normalMatrix);
-                        allPushVectors.push(worldPush);
-                    }
-                }
-            });
-        }
-
-        if (allPushVectors.length === 0) {
-            return new THREE.Vector3();
-        }
-
-        // Combine push vectors intelligently
-        let totalPush = new THREE.Vector3();
-
-        // Sort by magnitude - prioritize larger pushes
-        allPushVectors.sort((a, b) => b.lengthSq() - a.lengthSq());
-
-        // Use the strongest push as primary, blend in others
-        totalPush.copy(allPushVectors[0]);
-
-        for (let i = 1; i < allPushVectors.length; i++) {
-            const weight = Math.min(0.5, allPushVectors[i].length() / allPushVectors[0].length());
-            totalPush.add(allPushVectors[i].clone().multiplyScalar(weight));
-        }
-
-        // Cap the push to prevent explosive behavior
-        const maxPush = 0.5;
-        if (totalPush.length() > maxPush) {
-            totalPush.setLength(maxPush);
-        }
-
-        return totalPush;
-    }
-
     function emitMovementEvents(me, isIdle) {
         EventBus.emit("player:moved", {
             roomId: gameState.roomId,
@@ -2169,46 +2264,26 @@ const PlayerSystem = (() => {
         });
     }
 
-    function capsuleIntersectsTriangle(capsule, triangle) {
-        const capsuleLine = new THREE.Line3(capsule.start, capsule.end);
-
-        // Find closest point on triangle to segment
-        const closestTriPointStart = new THREE.Vector3();
-        triangle.closestPointToPoint(capsule.start, closestTriPointStart);
-
-        const closestTriPointEnd = new THREE.Vector3();
-        triangle.closestPointToPoint(capsule.end, closestTriPointEnd);
-
-        const dStart = capsule.start.distanceToSquared(closestTriPointStart);
-        const dEnd = capsule.end.distanceToSquared(closestTriPointEnd);
-
-        const closestTriPoint = dStart < dEnd ? closestTriPointStart : closestTriPointEnd;
-
-        const closestOnSegment = new THREE.Vector3();
-        capsuleLine.closestPointToPoint(closestTriPoint, true, closestOnSegment);
-
-        const distVec = closestOnSegment.clone().sub(closestTriPoint);
-        const distSq = distVec.lengthSq();
-
-        if (distSq < capsule.radius * capsule.radius) {
-            const depth = capsule.radius - Math.sqrt(distSq);
-            const pushOut = distVec.normalize().multiplyScalar(depth);
-            return { pushOut };
-        }
-        return null;
-    }
+    const _capsuleStart = new THREE.Vector3();
+    const _capsuleEnd = new THREE.Vector3();
 
     function getPlayerCapsule(player) {
         const radius = player.userData.capsule?.radius || PLAYER_CAPSULE_RADIUS;
         const height = player.userData.capsule?.height || PLAYER_CAPSULE_HEIGHT;
 
-        // Player position is at capsule center (half-height)
-        const center = player.position.clone();
+        const centerY = player.position.y;
+        const centerX = player.position.x;
+        const centerZ = player.position.z;
 
-        const start = center.clone().add(new THREE.Vector3(0, -height / 2 + radius, 0)); // foot
-        const end = center.clone().add(new THREE.Vector3(0, height / 2 - radius, 0));    // head
+        _capsuleStart.set(centerX, centerY - height / 2 + radius, centerZ);
+        _capsuleEnd.set(centerX, centerY + height / 2 - radius, centerZ);
 
-        return { start, end, radius, height };
+        return {
+            start: _capsuleStart,
+            end: _capsuleEnd,
+            radius,
+            height,
+        };
     }
 
     function getVelocity() {

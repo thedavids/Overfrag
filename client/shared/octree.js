@@ -11,33 +11,50 @@ export class OctreeNode {
 
         this.objects = [];
         this.children = null;
-        this.once = false;
-    }
-
-    getAABB() {
-        const half = this.size / 2;
-        return {
-            min: {
-                x: this.center.x - half,
-                y: this.center.y - half,
-                z: this.center.z - half,
-            },
-            max: {
-                x: this.center.x + half,
-                y: this.center.y + half,
-                z: this.center.z + half,
-            },
+        this._cachedAABB = null;
+        this._capsuleAABB = {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 }
         };
     }
 
+    getAABB() {
+        if (!this._cachedAABB) {
+            const half = this.size / 2;
+            this._cachedAABB = {
+                min: {
+                    x: this.center.x - half,
+                    y: this.center.y - half,
+                    z: this.center.z - half,
+                },
+                max: {
+                    x: this.center.x + half,
+                    y: this.center.y + half,
+                    z: this.center.z + half,
+                },
+            };
+        }
+        return this._cachedAABB;
+    }
+
     intersects(aabb) {
-        const epsilon = 1e-6; // tiny buffer
+        const epsilon = 1e-6;
         const nodeAABB = this.getAABB();
-        return !(
-            nodeAABB.max.x < aabb.min.x - epsilon || nodeAABB.min.x > aabb.max.x + epsilon ||
-            nodeAABB.max.y < aabb.min.y - epsilon || nodeAABB.min.y > aabb.max.y + epsilon ||
-            nodeAABB.max.z < aabb.min.z - epsilon || nodeAABB.min.z > aabb.max.z + epsilon
-        );
+
+        const minA = nodeAABB.min;
+        const maxA = nodeAABB.max;
+        const minB = aabb.min;
+        const maxB = aabb.max;
+
+        if (
+            maxA.x < minB.x - epsilon || minA.x > maxB.x + epsilon ||
+            maxA.y < minB.y - epsilon || minA.y > maxB.y + epsilon ||
+            maxA.z < minB.z - epsilon || minA.z > maxB.z + epsilon
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     insert(object, isRoot = true) {
@@ -68,7 +85,7 @@ export class OctreeNode {
             return true; // Skip inserting the original whole mesh
         }
 
-        const objAABB = this.computeObjectAABB(object);
+        const objAABB = OctreeNode.computeObjectAABB(object);
         const rootAABB = this.getAABB();
 
         const intersecting = this.intersects(objAABB);
@@ -133,7 +150,7 @@ export class OctreeNode {
         const remaining = [];
 
         for (const obj of this.objects) {
-            const objAABB = this.computeObjectAABB(obj);
+            const objAABB = OctreeNode.computeObjectAABB(obj);
             let inserted = false;
 
             for (const child of this.children) {
@@ -233,30 +250,45 @@ export class OctreeNode {
         return a.clone().add(b).add(c).multiplyScalar(1 / 3);
     }
 
-    computeObjectAABB(obj) {
+    static computeObjectAABB(obj) {
+        if (!obj.userData) {
+            obj.userData = {};
+        }
+
+        if (obj.userData._octreeAABB) {
+            return obj.userData._octreeAABB;
+        }
+
         const cx = obj.center?.x ?? obj.position.x;
         const cy = obj.center?.y ?? obj.position.y;
         const cz = obj.center?.z ?? obj.position.z;
+
         const half = {
             x: obj.size[0] / 2,
             y: obj.size[1] / 2,
             z: obj.size[2] / 2,
         };
 
-        return {
+        const aabb = {
             center: [cx, cy, cz],
             size: obj.size,
             min: { x: cx - half.x, y: cy - half.y, z: cz - half.z },
             max: { x: cx + half.x, y: cy + half.y, z: cz + half.z },
         };
+
+        obj.userData._octreeAABB = aabb;
+        return aabb;
     }
 
     intersectsAABB(a, b) {
-        return !(
+        if (
             a.max.x <= b.min.x || a.min.x >= b.max.x ||
             a.max.y <= b.min.y || a.min.y >= b.max.y ||
             a.max.z <= b.min.z || a.min.z >= b.max.z
-        );
+        ) {
+            return false;
+        }
+        return true;
     }
 
     computeGroupAABB(triangles) {
@@ -278,7 +310,7 @@ export class OctreeNode {
         };
     }
 
-    queryRange(range, result = [], filterFn = null, padding = 1.5, _alreadyPadded = false) {
+    queryRange(range, result = [], padding = 1.5, _alreadyPadded = false) {
         const queryBox = _alreadyPadded
             ? range
             : {
@@ -298,49 +330,44 @@ export class OctreeNode {
         if (this.objects.length === 0 && !this.children) return result;
 
         for (const obj of this.objects) {
-            const objAABB = this.computeObjectAABB(obj);
-            if (typeof obj.name === 'string' && obj.name.indexOf('ground') !== -1) {
-                if (!this.once) {
-
-                    console.log(queryBox, objAABB);
-                    this.once = true;
-                }
-            }
-            if (this.intersectsAABB(objAABB, queryBox)) {
-                if (!filterFn || filterFn(obj)) {
-                    result.push(obj);
-                }
+            if (this.intersectsAABB(obj.userData._octreeAABB, queryBox)) {
+                result.push(obj);
             }
         }
 
         if (this.children) {
             for (const child of this.children) {
-                child.queryRange(queryBox, result, filterFn, padding, true);
+                child.queryRange(queryBox, result, padding, true);
             }
         }
 
         return result;
     }
 
-    queryCapsule(capsule, result = [], filterFn = null) {
+    computeCapsuleAABB(capsule, padding = 0.5) {
+        const r = capsule.radius + padding;
+        const minX = Math.min(capsule.start.x, capsule.end.x);
+        const minY = Math.min(capsule.start.y, capsule.end.y);
+        const minZ = Math.min(capsule.start.z, capsule.end.z);
+        const maxX = Math.max(capsule.start.x, capsule.end.x);
+        const maxY = Math.max(capsule.start.y, capsule.end.y);
+        const maxZ = Math.max(capsule.start.z, capsule.end.z);
+
+        this._capsuleAABB.min.x = minX - r;
+        this._capsuleAABB.min.y = minY - r;
+        this._capsuleAABB.min.z = minZ - r;
+
+        this._capsuleAABB.max.x = maxX + r;
+        this._capsuleAABB.max.y = maxY + r;
+        this._capsuleAABB.max.z = maxZ + r;
+
+        return this._capsuleAABB;
+    }
+
+    queryCapsule(capsule, result = []) {
         const start = performance.now();
-        const r = capsule.radius;
-        const padding = 0.5; // small epsilon to catch borderline overlaps
-
-        const capsuleAABB = {
-            min: {
-                x: Math.min(capsule.start.x, capsule.end.x) - r - padding,
-                y: Math.min(capsule.start.y, capsule.end.y) - r - padding,
-                z: Math.min(capsule.start.z, capsule.end.z) - r - padding,
-            },
-            max: {
-                x: Math.max(capsule.start.x, capsule.end.x) + r + padding,
-                y: Math.max(capsule.start.y, capsule.end.y) + r + padding,
-                z: Math.max(capsule.start.z, capsule.end.z) + r + padding,
-            }
-        };
-
-        const query = this.queryRange(capsuleAABB, result, filterFn);
+        const capsuleAABB = this.computeCapsuleAABB(capsule);
+        const query = this.queryRange(capsuleAABB, result, 0, true);
         const end = performance.now();
         if (end - start > 10) {
             console.warn(`queryCapsule: ${(end - start).toFixed(2)} ms`);
@@ -348,7 +375,7 @@ export class OctreeNode {
         return query;
     }
 
-    queryRay(origin, direction, maxDist, result = [], filterFn = null) {
+    queryRay(origin, direction, maxDist, result = []) {
         const start = performance.now();
         const end = {
             x: origin.x + direction.x * maxDist,
@@ -369,7 +396,7 @@ export class OctreeNode {
             }
         };
 
-        const query = this.queryRange(range, result, filterFn);
+        const query = this.queryRange(range, result);
         const timeEnd = performance.now();
         if (timeEnd - start > 10) {
             console.warn(`queryRay: ${(timeEnd - start).toFixed(2)} ms`);
@@ -377,7 +404,7 @@ export class OctreeNode {
         return query;
     }
 
-    querySphere(center, radius, result = [], filterFn = null) {
+    querySphere(center, radius, result = []) {
         const range = {
             min: {
                 x: center.x - radius,
@@ -390,7 +417,7 @@ export class OctreeNode {
                 z: center.z + radius
             }
         };
-        return this.queryRange(range, result, filterFn);
+        return this.queryRange(range, result);
     }
 
     exportCollidersFromOctree() {
@@ -517,6 +544,7 @@ export class OctreeNode {
                     z: o.center.z + o.size[2] / 2
                 }
             };
+            OctreeNode.computeObjectAABB(mesh);
             return mesh;
         });
         if (data.children) {
