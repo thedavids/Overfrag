@@ -342,7 +342,7 @@ export class OctreeNode {
 
         const query = this.queryRange(capsuleAABB, result, filterFn);
         const end = performance.now();
-        if (end - start > 1) {
+        if (end - start > 10) {
             console.warn(`queryCapsule: ${(end - start).toFixed(2)} ms`);
         }
         return query;
@@ -371,7 +371,7 @@ export class OctreeNode {
 
         const query = this.queryRange(range, result, filterFn);
         const timeEnd = performance.now();
-        if (timeEnd - start > 1) {
+        if (timeEnd - start > 10) {
             console.warn(`queryRay: ${(timeEnd - start).toFixed(2)} ms`);
         }
         return query;
