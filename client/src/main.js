@@ -2215,6 +2215,15 @@ const PlayerSystem = (() => {
                         isGrounded = true;
                         velocity.y = Math.max(0, velocity.y);
                     }
+
+                    if (_collisionNormal.y < -0.5) {
+
+                        // Ceiling detected
+                        velocity.y = Math.min(velocity.y, 0); // Stop upward motion
+                        if (GrappleSystem?.state?.grappleMomentum) {
+                            GrappleSystem.state.grappleMomentum.y = 0;
+                        }
+                    }
                     break;
                 }
             }
