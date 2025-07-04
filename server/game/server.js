@@ -94,6 +94,13 @@ async function prepareMap(name) {
 
     return map;
 }
+
+function toClientMap(map) {
+    const mapToSend = { ...map };
+    delete mapToSend.bvh;
+    delete mapToSend.bvhMesh;
+    return mapToSend;
+}
 // === MapSystem End ===
 
 function distanceVec3(a, b) {
@@ -247,10 +254,7 @@ io.on('connection', (socket) => {
         rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
         console.warn(`Player ${safeName} created room`, socket.id);
 
-        const mapToSend = { ...rooms[roomId].map };
-        delete mapToSend.bvh;
-        delete mapToSend.bvhMesh;
-        socket.emit("loadMap", mapToSend);
+        socket.emit("loadMap", toClientMap(rooms[roomId].map));
 
         callback({ roomId, health: 100 });
         io.to(roomId).emit('playerList', rooms[roomId].players);
@@ -274,10 +278,7 @@ io.on('connection', (socket) => {
         rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
         console.warn(`Player ${safeName} joined room`, socket.id);
 
-        const mapToSend = { ...rooms[roomId].map };
-        delete mapToSend.bvh;
-        delete mapToSend.bvhMesh;
-        socket.emit("loadMap", mapToSend);
+        socket.emit("loadMap", toClientMap(rooms[roomId].map));
 
         callback({ success: true, health: 100 });
         io.to(roomId).emit('playerList', rooms[roomId].players);
