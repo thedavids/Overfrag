@@ -246,7 +246,12 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
         console.warn(`Player ${safeName} created room`, socket.id);
-        socket.emit("loadMap", rooms[roomId].map);
+
+        const mapToSend = { ...rooms[roomId].map };
+        delete mapToSend.bvh;
+        delete mapToSend.bvhMesh;
+        socket.emit("loadMap", mapToSend);
+
         callback({ roomId, health: 100 });
         io.to(roomId).emit('playerList', rooms[roomId].players);
     });
@@ -268,7 +273,12 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         rooms[roomId].players[socket.id] = { name: safeName, position: { x: 0, y: 0, z: 0 }, health: 100, modelName: safeModel };
         console.warn(`Player ${safeName} joined room`, socket.id);
-        socket.emit("loadMap", rooms[roomId].map);
+
+        const mapToSend = { ...rooms[roomId].map };
+        delete mapToSend.bvh;
+        delete mapToSend.bvhMesh;
+        socket.emit("loadMap", mapToSend);
+
         callback({ success: true, health: 100 });
         io.to(roomId).emit('playerList', rooms[roomId].players);
         sendMessage(roomId, safeName + ' joined the game.');
