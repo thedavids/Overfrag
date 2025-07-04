@@ -1183,7 +1183,7 @@ const LaserSystem = (() => {
             .add(forward.multiplyScalar(5));
         let shootDir = targetPoint.clone().sub(muzzle).normalize();
         const distance = shootDir.length();
-        const minDistance = 1.8;
+        const minDistance = 1.0;
 
         if (distance < minDistance) {
             // Target too close — using camera direction instead"
@@ -1482,7 +1482,7 @@ const RocketSystem = (() => {
 
         let shootDir = targetPoint.clone().sub(muzzle).normalize();
         const distance = shootDir.length();
-        const minDistance = 1.5;
+        const minDistance = 1.0;
 
         if (distance < minDistance) {
             // Target too close — using camera direction instead"

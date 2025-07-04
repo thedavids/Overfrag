@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OctreeNode, computeMapBounds, EventBus, TexturesDictionary, ModelsDictionary, createMapSystem } from 'shared';
 import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 let scene, camera, renderer, selected = null;
 let keys = {}, pitch = 0, yaw = 0;
@@ -29,7 +30,7 @@ function init() {
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambient);
-    
+
     const directional = new THREE.DirectionalLight(0xffffff, 1);
     directional.position.set(5, 10, 7);
     scene.add(directional);
@@ -218,9 +219,9 @@ function onWindowResize() {
 }
 
 async function createMapObject(obj, editable = false) {
-
+    // === GLTF Model ===
     if (obj.file && obj.model) {
-        const gltf = await ModelsDictionary.get(obj.file, obj.model); // uses your model loader
+        const gltf = await ModelsDictionary.get(obj.file, obj.model); // load model
         const model = gltf.clone(true);
 
         if (obj.position) {
@@ -228,38 +229,72 @@ async function createMapObject(obj, editable = false) {
         }
 
         if (obj.rotation) {
-            model.rotation.y = (obj.rotation.y || 0) * Math.PI / 180;
+            model.rotation.set(
+                (obj.rotation.x || 0) * Math.PI / 180,
+                (obj.rotation.y || 0) * Math.PI / 180,
+                (obj.rotation.z || 0) * Math.PI / 180
+            );
         }
 
         if (obj.scale) {
             model.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
         }
 
-        model.userData = { ...obj, offset: model.userData.offset, baseSize: model.userData.baseSize, isEditable: editable, isRootModel: true };
+        model.userData = {
+            ...obj,
+            offset: model.userData.offset,
+            baseSize: model.userData.baseSize,
+            isEditable: editable,
+            isRootModel: true
+        };
+
         model.traverse(child => {
             child.userData = { ...child.userData, isEditable: editable };
             if (child !== model) {
                 child.userData.parentModel = model;
             }
         });
+
         scene.add(model);
         return model;
     }
 
+    // === Primitive Box ===
     let material;
     if (obj.texture) {
         const tex = await TexturesDictionary.get(obj.texture, obj.texture);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(Math.ceil(obj.size[0] / 10), Math.ceil(obj.size[2] / 10));
+        tex.repeat.set(
+            Math.ceil(obj.size[0] / 10),
+            Math.ceil(obj.size[2] / 10)
+        );
         material = new THREE.MeshBasicMaterial({ map: tex });
     } else {
         material = new THREE.MeshBasicMaterial({ color: obj.color || '#888' });
     }
+
     const geometry = new THREE.BoxGeometry(...obj.size);
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(obj.position.x, obj.position.y, obj.position.z);
+
+    if (obj.position) {
+        mesh.position.set(obj.position.x, obj.position.y, obj.position.z);
+    }
+
+    if (obj.rotation) {
+        mesh.rotation.set(
+            (obj.rotation.x || 0) * Math.PI / 180,
+            (obj.rotation.y || 0) * Math.PI / 180,
+            (obj.rotation.z || 0) * Math.PI / 180
+        );
+    }
+
+    if (obj.scale) {
+        mesh.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
+    }
+
     mesh.userData = { ...obj, isEditable: editable };
+
     scene.add(mesh);
     return mesh;
 }
@@ -510,7 +545,8 @@ function deleteObject() {
 
 function exportMap() {
     const objects = [];
-    const octreeObjects = [];
+    const bvhMeshesToInsert = [];
+    const bvhMeshes = [];
 
     // First gather the objects to export
     scene.children.forEach(obj => {
@@ -547,15 +583,43 @@ function exportMap() {
 
         objects.push(base);
 
-        // === Prepare for Octree Insertion ===
+        // === Prepare for Octree & BVH Export ===
         obj.updateMatrixWorld(true);
 
+        // Include the object itself if it's a mesh
+        if (obj.isMesh && obj.geometry?.attributes?.position) {
+            const flattened = new THREE.Mesh(
+                obj.geometry.clone(),
+                new THREE.MeshBasicMaterial()
+            );
+            flattened.applyMatrix4(obj.matrixWorld);
+            flattened.updateMatrixWorld(true);
+
+            const box = new THREE.Box3().setFromObject(flattened);
+            const center = new THREE.Vector3();
+            const size = new THREE.Vector3();
+            box.getCenter(center);
+            box.getSize(size);
+
+            flattened.center = center;
+            flattened.size = [size.x, size.y, size.z];
+
+            flattened.userData = {
+                model: obj.userData?.model,
+                file: obj.userData?.file,
+                type: obj.userData?.type,
+            };
+
+            bvhMeshesToInsert.push(flattened);
+        }
+
+        // Traverse children (e.g., for GLTF or grouped meshes)
         obj.traverse(child => {
             if (!child.isMesh || !child.geometry?.attributes?.position) return;
 
             const flattened = new THREE.Mesh(
                 child.geometry.clone(),
-                new THREE.MeshBasicMaterial() // dummy material
+                new THREE.MeshBasicMaterial()
             );
             flattened.applyMatrix4(child.matrixWorld);
             flattened.updateMatrixWorld(true);
@@ -566,45 +630,91 @@ function exportMap() {
             box.getCenter(center);
             box.getSize(size);
 
-            // Don't assign `Box3` or full `userData` object to flattened directly
             flattened.center = center;
             flattened.size = [size.x, size.y, size.z];
 
-            // Minimal metadata only (avoid direct geometry or box reference)
             flattened.userData = {
                 model: child.userData?.model,
                 file: child.userData?.file,
                 type: child.userData?.type,
             };
 
-            octreeObjects.push(flattened);
+            bvhMeshesToInsert.push(flattened);
         });
-
     });
 
-    // === Build Octree ===
-    const bounds = computeMapBounds(octreeObjects);
-    const tempOctree = new OctreeNode(bounds.center, bounds.size * 2);
-    tempOctree.mergeDist = 0.5;
-
-    for (const mesh of octreeObjects) {
-        tempOctree.insert(mesh);
+    // === Convert for BVH export ===
+    for (const mesh of bvhMeshesToInsert) {
+        mesh.updateMatrixWorld(true);
+        const cloned = mesh.geometry.clone();
+        cloned.applyMatrix4(mesh.matrixWorld);
+        const bvhData = extractBVHGeometry(cloned);
+        if (bvhData) {
+            bvhMeshes.push(bvhData);
+        }
     }
 
-    const octreeJson = tempOctree.toJSON();
-    const newOctree = OctreeNode.fromJSON(octreeJson);
-    newOctree.draw(scene);
-
+    // === Final JSON export ===
     const result = JSON.stringify({
         name: "Jump Arena XL",
         objects,
         healthPacks: [],
-        octree: octreeJson
+        bvh: bvhMeshes
     }, null, 2);
 
     const json = compactVectorObjects(result);
 
     openOverlay("export", json);
+}
+
+
+function extractBVHGeometry(geometry) {
+    let posAttr = geometry.attributes.position;
+    if (!posAttr) return null;
+
+    // 🧹 Convert interleaved position attribute to normal attribute
+    if (posAttr.isInterleavedBufferAttribute) {
+        posAttr = posAttr.clone();
+    }
+
+    const indexAttr = geometry.index;
+    let index = null;
+    let indexCount = 0;
+    let indexType = null;
+
+    if (indexAttr) {
+        index = arrayBufferToBase64(indexAttr.array.buffer);
+        indexCount = indexAttr.count;
+        indexType = indexAttr.array.constructor.name;
+    }
+
+    return {
+        position: arrayBufferToBase64(posAttr.array.buffer),
+        count: posAttr.count,
+        index,
+        indexCount,
+        indexType
+    };
+}
+
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const buffer = new ArrayBuffer(len);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < len; i++) {
+        view[i] = binary.charCodeAt(i);
+    }
+    return buffer;
 }
 
 function compactVectorObjects(json) {
