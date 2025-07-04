@@ -448,10 +448,14 @@ const EffectSystem = (() => {
     const bloodParticles = [];
     const muzzleFlashes = [];
     const activeTracers = [];
+    const activeRocketExplosions = [];
 
     // Shared blood geometry and material
     const sharedBloodGeometry = new THREE.SphereGeometry(0.05, 4, 4);
     const sharedBloodMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+    // Rockets
+    const explosionMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.5 });
 
     EventBus.on("player:tookDamage", ({ position, health, damage }) => {
         createBloodAnimation(position, 10);
@@ -618,6 +622,21 @@ const EffectSystem = (() => {
         }
     }
 
+    function createRocketExplosion(position) {
+        const geometry = new THREE.SphereGeometry(1, 16, 16);
+        const mesh = new THREE.Mesh(geometry, explosionMaterial.clone());
+        mesh.position.copy(position);
+        mesh.scale.set(0.01, 0.01, 0.01); // start tiny
+        scene.add(mesh);
+
+        activeRocketExplosions.push({
+            mesh,
+            geometry,
+            material: mesh.material,
+            elapsed: 0,
+            duration: 0.5 // seconds
+        });
+    }
     // === Temp vectors for animation math ===
     const _tempVec1 = new THREE.Vector3();
     const _tempVec2 = new THREE.Vector3();
@@ -701,6 +720,24 @@ const EffectSystem = (() => {
                 activeTracers.splice(i, 1);
             }
         }
+
+        // === Explosions ===
+        for (let i = activeRocketExplosions.length - 1; i >= 0; i--) {
+            const explosion = activeRocketExplosions[i];
+            explosion.elapsed += delta;
+
+            const t = explosion.elapsed / explosion.duration;
+            const scale = THREE.MathUtils.lerp(0.01, 2.5, t);
+            explosion.mesh.scale.set(scale, scale, scale);
+            explosion.material.opacity = 1.0 - t;
+
+            if (explosion.elapsed >= explosion.duration) {
+                scene.remove(explosion.mesh);
+                explosion.geometry.dispose();
+                explosion.material.dispose();
+                activeRocketExplosions.splice(i, 1);
+            }
+        }
     }
 
     return {
@@ -708,6 +745,7 @@ const EffectSystem = (() => {
         spawnMuzzleFlash,
         spawnTracer,
         spawnHitEffect,
+        createRocketExplosion,
         update
     };
 })();
@@ -1140,13 +1178,25 @@ const LaserSystem = (() => {
         const forward = new THREE.Vector3();
         CameraSystem.getCamera().getWorldDirection(forward);
 
-        const muzzle = gameState.playerObj.position.clone()
+        let muzzle = gameState.playerObj.position.clone()
             .add(new THREE.Vector3(0, 0.5, 0))     // height offset (head/chest)
             .add(forward.multiplyScalar(5));
-        const shootDir = targetPoint.clone().sub(muzzle).normalize();
+        let shootDir = targetPoint.clone().sub(muzzle).normalize();
+        const distance = shootDir.length();
+        const minDistance = 1.8;
+
+        if (distance < minDistance) {
+            // Target too close — using camera direction instead"
+            shootDir = forward.clone();
+            muzzle = gameState.playerObj.position.clone()
+                .add(new THREE.Vector3(0, 0.5, 0))
+                .add(forward.clone());
+        } else {
+            shootDir.normalize();
+        }
 
         const laserId = `laser-${gameState.playerId}-${Date.now()}-${localLaserIdCounter++}`;
-        const laserObj = createLaserVisual(gameState.playerId, muzzle.clone(), shootDir.clone(), laserId);
+        const laserObj = createLaserVisual(muzzle.clone(), shootDir.clone(), laserId);
 
         pendingLasers[laserId] = { object: laserObj, origin: muzzle, direction: shootDir };
 
@@ -1158,7 +1208,7 @@ const LaserSystem = (() => {
         });
     }
 
-    function createLaserVisual(shooterId, origin, direction, laserId) {
+    function createLaserVisual(origin, direction, laserId) {
         const length = 5;
         const geometry = new THREE.CylinderGeometry(0.05, 0.05, length, 8);
         const laser = new THREE.Mesh(geometry, laserMaterial);
@@ -1204,7 +1254,7 @@ const LaserSystem = (() => {
             delete pendingLasers[id];
         }
         else {
-            createLaserVisual(shooterId, from, dir, id);
+            createLaserVisual(from, dir, id);
         }
     }
 
@@ -1400,12 +1450,152 @@ const ShotgunSystem = (() => {
 })();
 // === ShotgunSystem End ===
 
+// === RocketSystem Begin ===
+const RocketSystem = (() => {
+    const COOLDOWN = 1000; // ms between rockets
+    let lastFired = 0;
+
+    const rockets = [];
+    const rocketMaterial = new THREE.MeshBasicMaterial({ color: 0xff9900 });
+    let localRocketIdCounter = 0;
+    const pendingRockets = {}; // id -> { object }
+
+    let gameState = new GameState();
+    EventBus.on("game:started", (gs) => { gameState = gs; });
+    EventBus.on("game:ended", () => { gameState.clear(); });
+
+    function shoot() {
+        if (!gameState.roomId || !gameState.playerObj) return;
+
+        const now = Date.now();
+        if (now - lastFired < COOLDOWN) return;
+        lastFired = now;
+
+        const { origin, direction: cameraDirection, point: targetPoint } = CameraSystem.getCrosshairTarget(gameState.octree, 1000);
+
+        // === compute muzzle & shoot direction ===
+        const forward = cameraDirection.clone();
+
+        let muzzle = gameState.playerObj.position.clone()
+            .add(new THREE.Vector3(0, 0.5, 0))
+            .add(forward.clone().multiplyScalar(1.5));
+
+        let shootDir = targetPoint.clone().sub(muzzle).normalize();
+        const distance = shootDir.length();
+        const minDistance = 1.5;
+
+        if (distance < minDistance) {
+            // Target too close — using camera direction instead"
+            shootDir = forward.clone();
+            muzzle = gameState.playerObj.position.clone()
+                .add(new THREE.Vector3(0, 0.5, 0))
+                .add(forward.clone());
+        } else {
+            shootDir.normalize();
+        }
+
+        const rocketId = `rocket-${gameState.playerId}-${Date.now()}-${localRocketIdCounter++}`;
+        const rocketObj = createRocketVisual(muzzle.clone(), shootDir.clone(), rocketId);
+
+        pendingRockets[rocketId] = { object: rocketObj };
+
+        EventBus.emit("player:launchRocket", {
+            roomId: gameState.roomId,
+            origin: muzzle,
+            direction: shootDir,
+            rocketId
+        });
+    }
+
+    function createRocketVisual(origin, direction, rocketId) {
+        const length = 1.2;
+        const geometry = new THREE.CylinderGeometry(0.1, 0.1, length, 8);
+        const rocket = new THREE.Mesh(geometry, rocketMaterial);
+
+        rocket.rotation.x = Math.PI / 2;
+        rocket.position.copy(origin.clone().add(direction.clone().multiplyScalar(length / 2)));
+        rocket.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+        rocket.userData.id = rocketId;
+
+        scene.add(rocket);
+
+        rockets.push({
+            mesh: rocket,
+            direction: direction.clone().normalize(),
+            speed: 30,
+            life: 5
+        });
+
+        return rocket;
+    }
+
+    function createExplosion(position) {
+        EffectSystem.createRocketExplosion(position);
+    }
+
+    function update(delta) {
+        for (let i = rockets.length - 1; i >= 0; i--) {
+            const rocket = rockets[i];
+            rocket.mesh.position.addScaledVector(rocket.direction, delta * rocket.speed);
+            rocket.life -= delta;
+            if (rocket.life <= 0) {
+                scene.remove(rocket.mesh);
+                rockets.splice(i, 1);
+            }
+        }
+    }
+
+    function handleLaunched({ shooterId, origin, direction, id }) {
+        const from = new THREE.Vector3(origin.x, origin.y, origin.z);
+        const dir = new THREE.Vector3(direction.x, direction.y, direction.z).normalize();
+
+        if (shooterId === gameState.playerId && pendingRockets[id]) {
+            const { object } = pendingRockets[id];
+            object.position.copy(from);
+            object.userData.direction = dir;
+            delete pendingRockets[id];
+        } else {
+            createRocketVisual(from, dir, id);
+        }
+    }
+
+    function handleExploded({ id, position }) {
+        const index = rockets.findIndex(r => r.mesh.userData.id === id);
+        if (index !== -1) {
+            scene.remove(rockets[index].mesh);
+            rockets.splice(index, 1);
+        }
+
+        if (position) {
+            createExplosion(new THREE.Vector3(position.x, position.y, position.z));
+        }
+    }
+
+    function handleHit({ shooterId, targetId, position, damage, health }) {
+        EventBus.emit("player:rocketExplosion", { playerId: targetId, position });
+        if (shooterId !== targetId) {
+            EventBus.emit("player:healthChanged", { playerId: targetId, health });
+            EventBus.emit("player:tookDamage", { position, health, damage });
+        }
+    }
+
+    return {
+        shoot,
+        update,
+        handleLaunched,
+        handleExploded,
+        handleHit
+    };
+})();
+// === RocketSystem End ===
+
 // === WeaponSystem Begin ===
 const WeaponSystem = (() => {
     const weapons = {
         laser: LaserSystem,
         machinegun: MachineGunSystem,
-        shotgun: ShotgunSystem
+        shotgun: ShotgunSystem,
+        rocket: RocketSystem
     };
 
     let fireHeld = false;
@@ -1422,6 +1612,9 @@ const WeaponSystem = (() => {
         else if (weaponId === 3) {
             switchWeapon('machinegun');
         }
+        else if (weaponId === 4) {
+            switchWeapon('rocket');
+        }
         else {
             switchWeapon('laser');
         }
@@ -1433,6 +1626,9 @@ const WeaponSystem = (() => {
         }
         else if (currentWeapon === 'shotgun') {
             switchWeapon('machinegun');
+        }
+        else if (currentWeapon === 'machinegun') {
+            switchWeapon('rocket');
         }
         else {
             switchWeapon('laser');
@@ -2305,6 +2501,29 @@ const PlayerSystem = (() => {
         }
     });
 
+    EventBus.on("player:rocketExplosion", ({ playerId, position }) => {
+        if (playerId !== gameState.playerId) {
+            return;
+        }
+
+        const playerPos = gameState.playerObj.position;
+        const explosionPos = new THREE.Vector3(position.x, position.y, position.z);
+        const knockbackDir = playerPos.clone().sub(explosionPos).normalize();
+
+        const distance = playerPos.distanceTo(explosionPos);
+        const maxDistance = 6; // beyond this, no knockback
+
+        if (distance > maxDistance) return;
+
+        // Scale strength: closer = stronger knockback
+        const strengthFactor = 1 - distance / maxDistance;
+        const knockbackStrength = 15 * strengthFactor; // tweak multiplier as needed
+
+        velocity.x += knockbackDir.x * knockbackStrength;
+        velocity.y += knockbackDir.y * knockbackStrength + 2; // lift the player a bit
+        velocity.z += knockbackDir.z * knockbackStrength;
+    });
+
     return {
         update,
         getVelocity,
@@ -2552,6 +2771,10 @@ const NetworkSystem = (() => {
         socket.on("shotgunBlocked", ShotgunSystem.handleBlocked);
         socket.on("shotgunHit", ShotgunSystem.handleHit);
 
+        socket.on("rocketHit", RocketSystem.handleHit);
+        socket.on("rocketLaunched", RocketSystem.handleLaunched);
+        socket.on("rocketExploded", RocketSystem.handleExploded);
+
         socket.on("healthPackTaken", MapSystem.healthPackTaken);
         socket.on("healthPackRespawned", MapSystem.healthPackRespawned);
 
@@ -2688,6 +2911,15 @@ const NetworkSystem = (() => {
             origin: origin,
             direction: direction,
             id: laserId
+        });
+    });
+
+    EventBus.on("player:launchRocket", ({ roomId, origin, direction, rocketId }) => {
+        socket.emit('launchRocket', {
+            roomId: roomId,
+            origin: origin,
+            direction: direction,
+            id: rocketId
         });
     });
 
@@ -3012,6 +3244,8 @@ const animate = () => {
     CameraSystem.update(octree);
 
     LaserSystem.update(delta);
+
+    RocketSystem.update(delta);
 
     MapSystem.update(delta);
 

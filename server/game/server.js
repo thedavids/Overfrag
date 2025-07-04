@@ -25,6 +25,7 @@ process.on("unhandledRejection", (reason, promise) => {
 const rooms = {};
 const playerLastSeen = {}; // { socket.id: timestamp }
 const activeLasers = {}; // roomId -> [{ id, shooterId, origin, direction, position, life }]
+const activeRockets = {}; // roomId -> [rocketObj]
 
 // === MapSystem Begin ===
 const maps = {
@@ -279,7 +280,8 @@ io.on('connection', (socket) => {
       position: { ...origin },
       life: 2000, // ms to live
       speed: 100,  // units/sec
-      lastUpdate: now
+      lastUpdate: now,
+      justSpawned: true
     };
 
     if (!activeLasers[roomId]) activeLasers[roomId] = [];
@@ -518,6 +520,38 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('launchRocket', ({ roomId, origin, direction, id }) => {
+    if (!roomId || !origin || !direction || typeof id !== 'string') return;
+
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]) return;
+
+    const now = Date.now();
+    const rocket = {
+      id,
+      shooterId: socket.id,
+      origin,
+      direction,
+      position: { ...origin },
+      speed: 30,     // slower than laser
+      life: 10000,    // ms
+      radius: 5,     // explosion radius
+      damage: 35,
+      lastUpdate: now,
+      justSpawned: true
+    };
+
+    if (!activeRockets[roomId]) activeRockets[roomId] = [];
+    activeRockets[roomId].push(rocket);
+
+    io.to(roomId).emit('rocketLaunched', {
+      shooterId: socket.id,
+      origin,
+      direction,
+      id
+    });
+  });
+
   socket.on('disconnect', () => {
     handleDisconnect(socket);
   });
@@ -543,6 +577,10 @@ function handleDisconnect(socket) {
       if (activeLasers[roomId]) {
         activeLasers[roomId] = activeLasers[roomId].filter(l => l.shooterId !== socket.id);
       }
+      if (activeRockets[roomId]) {
+        activeRockets[roomId] = activeRockets[roomId].filter(l => l.shooterId !== socket.id);
+      }
+      activeRockets
       const name = rooms[roomId].players[socket.id].name;
       sendMessage(roomId, name + ' left the game.');
       delete rooms[roomId].players[socket.id];
@@ -550,6 +588,7 @@ function handleDisconnect(socket) {
       console.log(`Client disconnected: ${name} ${socket.id}`);
       if (Object.keys(rooms[roomId].players).length === 0) {
         delete activeLasers[roomId];
+        delete activeRockets[roomId];
         delete rooms[roomId]?.octree;
         delete rooms[roomId];
         console.warn("Room deleted", roomId);
@@ -586,6 +625,7 @@ function cleanupStalePlayer(id) {
       console.log(`Client disconnected: ${name} ${id}`);
       if (Object.keys(rooms[roomId].players).length === 0) {
         delete activeLasers[roomId];
+        delete activeRockets[roomId];
         delete rooms[roomId];
         delete rooms[roomId]?.octree;
         console.warn("Room deleted (stale cleanup):", roomId);
@@ -650,6 +690,10 @@ function updateRoomLasers(roomId) {
   for (let i = lasers.length - 1; i >= 0; i--) {
     const laser = lasers[i];
     const delta = now - (laser.lastUpdate || now); // milliseconds since last update
+    if (laser.justSpawned) {
+      laser.justSpawned = false;
+      continue; // skip this frame
+    }
 
     laser.life -= delta;
     laser.lastUpdate = now;
@@ -741,10 +785,114 @@ function updateRoomLasers(roomId) {
   }
 }
 
+function updateRoomRockets(roomId) {
+  const rockets = activeRockets[roomId];
+  const room = rooms[roomId];
+  if (!room || !rockets) return;
+
+  const now = Date.now();
+
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const rocket = rockets[i];
+    const delta = now - (rocket.lastUpdate || now);
+    if (rocket.justSpawned) {
+      rocket.justSpawned = false;
+      continue; // skip this frame
+    }
+
+    rocket.life -= delta;
+    rocket.lastUpdate = now;
+
+    const moveDistance = (rocket.speed * delta) / 1000;
+    rocket.prevPosition = { ...rocket.position };
+
+    rocket.position.x += rocket.direction.x * moveDistance;
+    rocket.position.y += rocket.direction.y * moveDistance;
+    rocket.position.z += rocket.direction.z * moveDistance;
+
+    let hitWall = false;
+    let hitPlayerId = null;
+    let explosionPos = { ...rocket.position };
+
+    // === 1. Check for direct player hit ===
+    const hitRadius = 0.8;
+
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (pid === rocket.shooterId) continue;
+
+      const hit = segmentSphereIntersect(
+        rocket.prevPosition,
+        rocket.position,
+        player.position,
+        hitRadius
+      );
+
+      if (hit) {
+        hitPlayerId = pid;
+        explosionPos = { ...player.position }; // explode at player center
+        break;
+      }
+    }
+
+    // === 2. Check for wall collision ===
+    const nearbyObjects = room.octree.queryRay(rocket.prevPosition, rocket.direction, moveDistance);
+    for (const obj of nearbyObjects) {
+      const { min, max } = getAABB(obj);
+      if (rayIntersectsAABB(rocket.prevPosition, rocket.direction, moveDistance, min, max)) {
+        hitWall = true;
+        break;
+      }
+    }
+
+    // === 3. Should detonate? ===
+    const detonated = hitWall || hitPlayerId !== null || rocket.life <= 0;
+
+    if (detonated) {
+      rockets.splice(i, 1); // remove rocket
+
+      // === 4. Apply AoE damage ===
+      for (const [pid, player] of Object.entries(room.players)) {
+        const dist = distanceVec3(player.position, explosionPos);
+
+        if (dist <= rocket.radius) {
+          let damage = 0;
+          if (pid !== rocket.shooterId) {
+            damage = Math.round((1 - dist / rocket.radius) * rocket.damage);
+            player.health = (player.health || 100) - damage;
+
+            if (player.health <= 0) {
+              respawnPlayer(roomId, pid, rocket.shooterId, "was rocketed");
+            }
+          }
+
+          io.to(roomId).emit('rocketHit', {
+            shooterId: rocket.shooterId,
+            targetId: pid,
+            position: explosionPos,
+            health: Math.max(0, player.health),
+            damage
+          });
+        }
+      }
+
+      // === 5. Notify explosion visual ===
+      io.to(roomId).emit('rocketExploded', {
+        id: rocket.id,
+        position: explosionPos
+      });
+    }
+  }
+}
+
 setInterval(() => {
   for (const roomId in activeLasers) {
     if (activeLasers[roomId]?.length > 0) {
       updateRoomLasers(roomId);
+    }
+  }
+  for (const roomId in activeRockets) {
+    if (activeRockets[roomId]?.length > 0) {
+      updateRoomRockets(roomId);
     }
   }
 }, 1000 / 60); // 60 FPS

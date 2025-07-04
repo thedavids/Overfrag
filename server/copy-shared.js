@@ -19,5 +19,5 @@ function copyRecursive(src, dest) {
   }
 }
 
-copyRecursive('../shared', './shared');
-console.log('✅ Copied shared/ to server/shared/');
+copyRecursive('../../shared', './shared');
+console.log('✅ Copied ../../shared/ to ./shared/');

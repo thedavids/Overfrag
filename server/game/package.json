@@ -1,0 +1,15 @@
+{
+  "name": "game-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node ../copy-shared.js && node server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.7.2",
+    "three": "^0.160.0",
+    "three-mesh-bvh": "^0.9.1"
+  }
+}

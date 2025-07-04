@@ -7,3 +7,4 @@ client/shared/
 server/shared/
 mapEditor/shared/
 mapEditor/maps/export/
+server/game/shared/
