@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -33,12 +34,10 @@ const activeRockets = {}; // roomId -> [rocketObj]
 // === MapSystem Begin ===
 const maps = {
     default: { "name": "Jump Arena" },
-    //road: { "name": "Road" },
     city: { "name": "City" },
     anotherCity: { "name": "Detailed City" },
     giganticCity: { "name": "Gigantic City" },
-    blockTown: { "name": "Block Town" },
-    //q2dm1: { "name": "Q2DM1" }
+    blockTown: { "name": "Block Town" }
 };
 
 export async function loadMap(name = "default") {
@@ -151,24 +150,6 @@ function segmentSphereIntersect(p1, p2, center, radius) {
     const t2 = (-b + Math.sqrt(discriminant)) / (2 * a);
 
     return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
-}
-
-function getAABB(obj) {
-    const cx = obj.center?.x ?? obj.position.x;
-    const cy = obj.center?.y ?? obj.position.y;
-    const cz = obj.center?.z ?? obj.position.z;
-    const half = {
-        x: obj.size[0] / 2,
-        y: obj.size[1] / 2,
-        z: obj.size[2] / 2,
-    };
-
-    return {
-        center: [cx, cy, cz],
-        size: obj.size,
-        min: { x: cx - half.x, y: cy - half.y, z: cz - half.z },
-        max: { x: cx + half.x, y: cy + half.y, z: cz + half.z },
-    };
 }
 
 function base64ToArrayBuffer(base64) {
