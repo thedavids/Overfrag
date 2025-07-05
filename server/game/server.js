@@ -239,11 +239,21 @@ io.on('connection', (socket) => {
         const safeModel = modelName.replace(/[^\w.-]/g, '');
         const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
 
-        let mapNameToLoad = safeName.toLowerCase() === 'q2dm1' ? safeName.toLowerCase() : (mapName || 'default');
-        if (!maps[mapNameToLoad] || !maps[mapNameToLoad].objects) {
-            maps[mapNameToLoad] = await prepareMap(mapNameToLoad);
+        let mapNameToLoad = safeName.toLowerCase() === 'q2dm1'
+            ? safeName.toLowerCase()
+            : (mapName || 'default');
+
+        let map;
+
+        if (mapNameToLoad === 'q2dm1') {
+            // Load q2dm1 but don't cache it
+            map = await prepareMap('q2dm1');
+        } else {
+            if (!maps[mapNameToLoad] || !maps[mapNameToLoad].objects) {
+                maps[mapNameToLoad] = await prepareMap(mapNameToLoad);
+            }
+            map = maps[mapNameToLoad];
         }
-        const map = maps[mapNameToLoad];
 
         rooms[roomId] = {
             players: {},
