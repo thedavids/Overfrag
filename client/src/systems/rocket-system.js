@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EventBus } from 'shared';
 import { GameState } from 'shared';
 
-export function createRocketSystem({ scene, cameraSystem, effectSystem, socket }) {
+export function createRocketSystem({ scene, cameraSystem, effectSystem }) {
     const COOLDOWN = 1000; // ms between rockets
     let lastFired = 0;
 

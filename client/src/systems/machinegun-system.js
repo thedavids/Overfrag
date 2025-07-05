@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EventBus } from 'shared';
 import { GameState } from 'shared';
 
-export function createMachineGunSystem({ cameraSystem, effectSystem, socket }) {
+export function createMachineGunSystem({ cameraSystem, effectSystem }) {
     const COOLDOWN = 100; // ms between shots
     let lastFired = 0;
 
@@ -26,7 +26,7 @@ export function createMachineGunSystem({ cameraSystem, effectSystem, socket }) {
 
         const shootDir = targetPoint.clone().sub(muzzle).normalize();
 
-        socket.emit('machinegunFire', {
+        EventBus.emit("player:machinegunFire", {
             roomId: gameState.roomId,
             origin: muzzle,
             direction: shootDir

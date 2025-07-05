@@ -104,9 +104,9 @@ window.addEventListener('resize', () => {
 
 // === WeaponSystem ===
 const LaserSystem = createLaserSystem({ scene, cameraSystem: CameraSystem });
-const MachineGunSystem = createMachineGunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem, socket });
-const ShotgunSystem = createShotgunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem, socket });
-const RocketSystem = createRocketSystem({ scene, cameraSystem: CameraSystem, effectSystem: EffectSystem, socket });
+const MachineGunSystem = createMachineGunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem });
+const ShotgunSystem = createShotgunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem });
+const RocketSystem = createRocketSystem({ scene, cameraSystem: CameraSystem, effectSystem: EffectSystem });
 const WeaponSystem = createWeaponSystem({ laser: LaserSystem, machinegun: MachineGunSystem, shotgun: ShotgunSystem, rocket: RocketSystem });
 
 // === GrappleSystem ===
@@ -277,6 +277,22 @@ const NetworkSystem = (() => {
             origin: origin,
             direction: direction,
             id: laserId
+        });
+    });
+
+    EventBus.on("player:machinegunFire", ({ roomId, origin, direction }) => {
+        socket.emit('machinegunFire', {
+            roomId: roomId,
+            origin: origin,
+            direction: direction
+        });
+    });
+
+    EventBus.on("player:shotgunFire", ({ roomId, origin, direction }) => {
+        socket.emit('shotgunFire', {
+            roomId: roomId,
+            origin: origin,
+            direction: direction
         });
     });
 

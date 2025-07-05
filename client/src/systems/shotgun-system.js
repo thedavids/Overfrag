@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EventBus } from 'shared';
 import { GameState } from 'shared';
 
-export function createShotgunSystem({ cameraSystem, effectSystem, socket }) {
+export function createShotgunSystem({ cameraSystem, effectSystem }) {
     const COOLDOWN = 800; // ms
     const PELLET_COUNT = 8;
     const SPREAD_ANGLE = 10; // degrees
@@ -42,7 +42,7 @@ export function createShotgunSystem({ cameraSystem, effectSystem, socket }) {
             performVisualRay(muzzle, dir, true);
         }
 
-        socket.emit('shotgunFire', {
+        EventBus.emit("player:shotgunFire", {
             roomId: gameState.roomId,
             origin: muzzle,
             direction: baseDirection.clone()
