@@ -93,7 +93,6 @@ export function createPlayerSystem({ inputSystem, grappleSystem, PLAYER_CAPSULE_
 
     function updatePhysicsStep(delta, octree) {
         const player = gameState.playerObj;
-        if (!player) return;
 
         const keyState = inputSystem.getKeyState();
         const { playerYaw } = inputSystem.getLookAngles();
