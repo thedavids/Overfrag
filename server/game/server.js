@@ -270,6 +270,8 @@ const cleanupInterval = 60000; // 60s
 const statsInterval = 30000;   // 30s
 
 let lastTimestamp = performance.now();
+let tickCount = 0;
+let prevCpuUsage = process.cpuUsage();
 
 function mainLoop() {
     if (intervalId) clearInterval(intervalId);
@@ -287,9 +289,9 @@ function mainLoop() {
 
         avgTickTime = smoothing * tickDuration + (1 - smoothing) * avgTickTime;
 
-        // Accumulate elapsed time
         cleanupElapsed += delta;
         statsElapsed += delta;
+        tickCount++;
 
         // Periodic cleanup
         if (cleanupElapsed >= cleanupInterval) {
@@ -299,10 +301,18 @@ function mainLoop() {
 
         // Periodic stats logging
         if (statsElapsed >= statsInterval) {
-            const usage = process.cpuUsage();
+            const currentCpu = process.cpuUsage(prevCpuUsage); // delta since last snapshot
             const mem = process.memoryUsage().rss;
-            console.log(`CPU: ${(usage.user / 1000).toFixed(1)}ms, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB`);
+
+            const totalCpuMicros = currentCpu.user + currentCpu.system;
+            const avgCpuMsPerTick = totalCpuMicros / tickCount / 1000;
+
+            console.log(`Ticks: ${tickCount}, Avg CPU: ${avgCpuMsPerTick.toFixed(2)}ms, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB`);
+
+            // Reset
             statsElapsed = 0;
+            tickCount = 0;
+            prevCpuUsage = process.cpuUsage();
         }
 
         // Adapt tick rate if needed
