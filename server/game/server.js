@@ -256,14 +256,76 @@ io.on('connection', (socket) => {
     });
 });
 
-setInterval(() => {
-    roomsSystem.cleanupInactivePlayers(300000, io);
-}, 30000);
+// server side game loop
+let tickRate = 60; // target ticks per second
+let intervalId = null;
+let avgTickTime = 0;
+let smoothing = 0.1; // exponential moving average
 
-setInterval(() => {
-    laserSystem.updateLasers(1000 / 60, () => roomsSystem.getRooms(), (map) => map.bvhMesh);
-    rocketSystem.updateRockets(1000 / 60, () => roomsSystem.getRooms(), (map) => map.bvhMesh);
-}, 1000 / 60); // 60 FPS
+// Accumulators
+let cleanupElapsed = 0;
+let statsElapsed = 0;
+
+const cleanupInterval = 60000; // 60s
+const statsInterval = 30000;   // 30s
+
+let lastTimestamp = performance.now();
+
+function mainLoop() {
+    if (intervalId) clearInterval(intervalId);
+
+    intervalId = setInterval(() => {
+        const now = performance.now();
+        const delta = now - lastTimestamp;
+        lastTimestamp = now;
+
+        // Main tick logic
+        const tickStart = performance.now();
+        laserSystem.updateLasers(1000 / tickRate, roomsSystem.getRooms, m => m.bvhMesh);
+        rocketSystem.updateRockets(1000 / tickRate, roomsSystem.getRooms, m => m.bvhMesh);
+        const tickDuration = performance.now() - tickStart;
+
+        avgTickTime = smoothing * tickDuration + (1 - smoothing) * avgTickTime;
+
+        // Accumulate elapsed time
+        cleanupElapsed += delta;
+        statsElapsed += delta;
+
+        // Periodic cleanup
+        if (cleanupElapsed >= cleanupInterval) {
+            roomsSystem.cleanupInactivePlayers(cleanupInterval, io);
+            cleanupElapsed = 0;
+        }
+
+        // Periodic stats logging
+        if (statsElapsed >= statsInterval) {
+            const usage = process.cpuUsage();
+            const mem = process.memoryUsage().rss;
+            console.log(`CPU: ${(usage.user / 1000).toFixed(1)}ms, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB`);
+            statsElapsed = 0;
+        }
+
+        // Adapt tick rate if needed
+        adaptTickRate();
+
+    }, 1000 / tickRate);
+}
+
+function adaptTickRate() {
+    if (avgTickTime > 16 && tickRate > 30) {
+        console.warn(`High tick time (${avgTickTime.toFixed(2)}ms) — lowering tick rate`);
+        tickRate = Math.max(30, tickRate - 10);
+        mainLoop(); // restart with new rate
+    }
+    else if (avgTickTime < 10 && tickRate < 60) {
+        console.log(`Low tick time (${avgTickTime.toFixed(2)}ms) — raising tick rate`);
+        tickRate = Math.min(60, tickRate + 10);
+        mainLoop(); // restart with new rate
+    }
+}
+
+// Start loop
+mainLoop();
 
 function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
 

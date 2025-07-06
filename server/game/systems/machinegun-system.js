@@ -6,20 +6,26 @@ export function createMachineGunSystem() {
     const DAMAGE = 3;
     const RANGE = 100;
     const PLAYER_HITBOX = { x: 0.4, y: 0.9, z: 0.4 };
+    const tempOrigin = new THREE.Vector3();
+    const tempDir = new THREE.Vector3();
+    const tempRaycaster = new THREE.Raycaster();
+    const tempMesh = new THREE.Mesh();
 
     function fire({ roomId, room, shooterId, origin, direction }, getBVHGeometry) {
         let nearestWallDist = Infinity;
         let wallHitPos = null;
 
-        const raycaster = new THREE.Raycaster(
-            new THREE.Vector3(origin.x, origin.y, origin.z),
-            new THREE.Vector3(direction.x, direction.y, direction.z).normalize(),
-            0,
-            RANGE
-        );
+        // Setup reusable ray
+        tempOrigin.set(origin.x, origin.y, origin.z);
+        tempDir.set(direction.x, direction.y, direction.z).normalize();
 
-        const mesh = new THREE.Mesh(getBVHGeometry(room.map));
-        const hits = raycaster.intersectObject(mesh, true);
+        tempRaycaster.ray.origin.copy(tempOrigin);
+        tempRaycaster.ray.direction.copy(tempDir);
+        tempRaycaster.far = RANGE;
+
+        tempMesh.geometry = getBVHGeometry(room.map);
+
+        const hits = tempRaycaster.intersectObject(tempMesh, true);
 
         if (hits.length > 0) {
             nearestWallDist = hits[0].distance;
@@ -67,10 +73,20 @@ export function createMachineGunSystem() {
             });
 
             if (victim.health <= 0) {
-                EventBus.emit("playerDied", { roomId, playerId: hitPlayerId, shooterId, message: "machine gunned" });
+                EventBus.emit("playerDied", {
+                    roomId,
+                    playerId: hitPlayerId,
+                    shooterId,
+                    message: "machine gunned"
+                });
             }
         } else if (wallHitPos) {
-            EventBus.emit("machinegunSystem:machinegunBlocked", { roomId, shooterId, origin, direction });
+            EventBus.emit("machinegunSystem:machinegunBlocked", {
+                roomId,
+                shooterId,
+                origin,
+                direction
+            });
         }
     }
 

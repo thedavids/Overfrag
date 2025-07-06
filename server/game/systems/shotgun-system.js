@@ -8,6 +8,18 @@ export function createShotgunSystem() {
     const BASE_SPREAD_ANGLE = 10;
     const MIN_SPREAD_ANGLE = 0;
     const MAX_EFFECTIVE_DISTANCE = 15;
+    const tempMesh = new THREE.Mesh(); // Set geometry per room
+    const tempOrigin = new THREE.Vector3();
+    const tempDirection = new THREE.Vector3();
+    const tempMin = new THREE.Vector3();
+    const tempMax = new THREE.Vector3();
+    const tempHitVec = new THREE.Vector3();
+    const tempRaycaster = new THREE.Raycaster();
+    const tempSpreadDir = new THREE.Vector3();
+    const tempUp = new THREE.Vector3();
+    const tempRight = new THREE.Vector3();
+    const tempUpOrtho = new THREE.Vector3();
+    const tempOffset = new THREE.Vector3();
 
     function computeShotgunDamage(distance) {
         if (distance < 15) return 5;
@@ -21,104 +33,114 @@ export function createShotgunSystem() {
         const randomAngle = Math.random() * 2 * Math.PI;
         const randomRadius = Math.random() * Math.tan(spreadAngleRad);
 
-        const dir = MathUtils.toVector3(baseDir).clone().normalize();
-        const up = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-        const right = new THREE.Vector3().crossVectors(up, dir).normalize();
-        const upOrtho = new THREE.Vector3().crossVectors(dir, right).normalize();
+        // dir = normalized baseDir
+        tempSpreadDir.set(baseDir.x, baseDir.y, baseDir.z).normalize();
 
-        const offset = right.multiplyScalar(Math.cos(randomAngle) * randomRadius)
-            .add(upOrtho.multiplyScalar(Math.sin(randomAngle) * randomRadius * (1 + downwardBias)));
+        // up vector
+        if (Math.abs(tempSpreadDir.y) < 0.99) {
+            tempUp.set(0, 1, 0);
+        } else {
+            tempUp.set(1, 0, 0);
+        }
 
-        return dir.clone().add(offset).normalize();
+        // right = up × dir
+        tempRight.crossVectors(tempUp, tempSpreadDir).normalize();
+
+        // upOrtho = dir × right
+        tempUpOrtho.crossVectors(tempSpreadDir, tempRight).normalize();
+
+        // offset = right * cos(a) * r + upOrtho * sin(a) * r * (1 + downwardBias)
+        tempOffset.copy(tempRight).multiplyScalar(Math.cos(randomAngle) * randomRadius)
+            .add(tempUpOrtho.multiplyScalar(Math.sin(randomAngle) * randomRadius * (1 + downwardBias)));
+
+        // final direction = dir + offset
+        return tempSpreadDir.add(tempOffset).normalize().clone(); // clone if caller stores the result
     }
 
     function fire({ roomId, room, shooterId, origin, direction }, getBVHGeometry) {
+        tempOrigin.set(origin.x, origin.y, origin.z);
+        tempDirection.set(direction.x, direction.y, direction.z).normalize();
 
+        // Spread adjustment based on closest enemy
         let closestPlayerDist = Infinity;
 
         for (const [pid, player] of Object.entries(room.players)) {
             if (pid === shooterId) continue;
 
-            const toPlayer = {
-                x: player.position.x - origin.x,
-                y: player.position.y - origin.y,
-                z: player.position.z - origin.z
-            };
+            const dx = player.position.x - origin.x;
+            const dy = player.position.y - origin.y;
+            const dz = player.position.z - origin.z;
+            const dot = dx * tempDirection.x + dy * tempDirection.y + dz * tempDirection.z;
 
-            const dirNorm = MathUtils.normalizeVec3(direction);
-            const dot = toPlayer.x * dirNorm.x + toPlayer.y * dirNorm.y + toPlayer.z * dirNorm.z;
-            if (dot <= 0) continue;
-
-            const dist = dot;
-            if (dist < closestPlayerDist) {
-                closestPlayerDist = dist;
+            if (dot > 0 && dot < closestPlayerDist) {
+                closestPlayerDist = dot;
             }
         }
 
         const clampedDist = Math.min(closestPlayerDist, MAX_EFFECTIVE_DISTANCE);
-        const t = clampedDist / MAX_EFFECTIVE_DISTANCE;
-        const ease = Math.pow(t, 4.0);
+        const spreadT = clampedDist / MAX_EFFECTIVE_DISTANCE;
+        const ease = Math.pow(spreadT, 4.0);
         const spreadAngle = MIN_SPREAD_ANGLE + ease * (BASE_SPREAD_ANGLE - MIN_SPREAD_ANGLE);
 
         const hitsPerPlayer = {};
-        const mesh = new THREE.Mesh(getBVHGeometry(room.map));
+        tempMesh.geometry = getBVHGeometry(room.map);
 
         for (let i = 0; i < PELLET_COUNT; i++) {
             const pelletDir = getSpreadDirection(direction, spreadAngle);
-            let nearestWallDist = Infinity;
+
+            tempRaycaster.set(tempOrigin, pelletDir.clone().normalize());
+            tempRaycaster.far = MAX_RANGE;
+
+            let wallHitDist = Infinity;
             let wallHitPos = null;
 
-            const raycaster = new THREE.Raycaster(
-                new THREE.Vector3(origin.x, origin.y, origin.z),
-                new THREE.Vector3(pelletDir.x, pelletDir.y, pelletDir.z).normalize(),
-                0,
-                MAX_RANGE
-            );
-
-            const hits = raycaster.intersectObject(mesh, true);
+            const hits = tempRaycaster.intersectObject(tempMesh, true);
             if (hits.length > 0) {
-                nearestWallDist = hits[0].distance;
+                wallHitDist = hits[0].distance;
                 wallHitPos = hits[0].point;
             }
 
             let hitPlayerId = null;
             let hitPlayerPos = null;
 
-            const playerHalfSize = { x: 0.7, y: 1.6, z: 0.7 };
-
             for (const [pid, player] of Object.entries(room.players)) {
                 if (pid === shooterId) continue;
 
-                const min = {
-                    x: player.position.x - playerHalfSize.x,
-                    y: player.position.y - playerHalfSize.y,
-                    z: player.position.z - playerHalfSize.z
-                };
+                tempMin.set(
+                    player.position.x - 0.7,
+                    player.position.y - 1.6,
+                    player.position.z - 0.7
+                );
+                tempMax.set(
+                    player.position.x + 0.7,
+                    player.position.y + 1.6,
+                    player.position.z + 0.7
+                );
 
-                const max = {
-                    x: player.position.x + playerHalfSize.x,
-                    y: player.position.y + playerHalfSize.y,
-                    z: player.position.z + playerHalfSize.z
-                };
-
-                const hitDist = MathUtils.rayIntersectsAABB(origin, pelletDir, MAX_RANGE, min, max);
-                if (hitDist != null && hitDist < nearestWallDist) {
-                    nearestWallDist = hitDist;
+                const hitDist = MathUtils.rayIntersectsAABB(origin, pelletDir, MAX_RANGE, tempMin, tempMax);
+                if (hitDist != null && hitDist < wallHitDist) {
+                    wallHitDist = hitDist;
                     hitPlayerId = pid;
-                    hitPlayerPos = MathUtils.addVec3(origin, MathUtils.scaleVec3(pelletDir, hitDist));
+                    hitPlayerPos = MathUtils.addVec3(origin, MathUtils.scaleVec3(pelletDir, hitDist, tempHitVec));
                 }
             }
 
             if (hitPlayerId) {
-                const damage = computeShotgunDamage(nearestWallDist);
-                hitsPerPlayer[hitPlayerId] = hitsPerPlayer[hitPlayerId] || {
-                    totalDamage: 0,
-                    position: hitPlayerPos
-                };
+                const damage = computeShotgunDamage(wallHitDist);
+                if (!hitsPerPlayer[hitPlayerId]) {
+                    hitsPerPlayer[hitPlayerId] = {
+                        totalDamage: 0,
+                        position: hitPlayerPos
+                    };
+                }
                 hitsPerPlayer[hitPlayerId].totalDamage += damage;
             } else if (wallHitPos) {
-                
-                EventBus.emit("shotgunSystem:shotgunBlocked", { roomId, shooterId, origin, direction: pelletDir });
+                EventBus.emit("shotgunSystem:shotgunBlocked", {
+                    roomId,
+                    shooterId,
+                    origin,
+                    direction: pelletDir
+                });
             }
         }
 
@@ -138,7 +160,12 @@ export function createShotgunSystem() {
             });
 
             if (victim.health <= 0) {
-                EventBus.emit("playerDied", { roomId, playerId: targetId, shooterId, message: "shotgunned" });
+                EventBus.emit("playerDied", {
+                    roomId,
+                    playerId: targetId,
+                    shooterId,
+                    message: "shotgunned"
+                });
             }
         }
     }

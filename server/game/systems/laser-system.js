@@ -5,6 +5,8 @@ import { EventBus } from '../shared/event-bus.js';
 
 export function createLaserSystem() {
     const activeLasers = {}; // roomId → [laser objects]
+    const tempRaycaster = new THREE.Raycaster();
+    const tempMesh = new THREE.Mesh(); // Set geometry per room
 
     function spawnLaser(roomId, shooterId, origin, direction, id) {
         const now = Date.now();
@@ -35,8 +37,7 @@ export function createLaserSystem() {
             if (!room || !lasers) continue;
 
             const players = room.players;
-            const geometry = getBVHGeometry(room.map);
-            const mesh = new THREE.Mesh(geometry);
+            tempMesh.geometry = getBVHGeometry(room.map);
 
             for (let i = lasers.length - 1; i >= 0; i--) {
                 const laser = lasers[i];
@@ -49,26 +50,28 @@ export function createLaserSystem() {
                 laser.lastUpdate = now;
 
                 const moveDistance = (laser.speed * deltaTime) / 1000;
-                laser.prevPosition = { ...laser.position };
+                if (!laser.prevPosition) laser.prevPosition = { x: 0, y: 0, z: 0 };
+                laser.prevPosition.x = laser.position.x;
+                laser.prevPosition.y = laser.position.y;
+                laser.prevPosition.z = laser.position.z;
                 laser.position.x += laser.direction.x * moveDistance;
                 laser.position.y += laser.direction.y * moveDistance;
                 laser.position.z += laser.direction.z * moveDistance;
 
                 // Check wall collisions
-                const raycaster = new THREE.Raycaster();
-                raycaster.ray.origin.set(
+                tempRaycaster.ray.origin.set(
                     laser.prevPosition.x,
                     laser.prevPosition.y,
                     laser.prevPosition.z
                 );
-                raycaster.ray.direction.set(
+                tempRaycaster.ray.direction.set(
                     laser.direction.x,
                     laser.direction.y,
                     laser.direction.z
                 ).normalize();
-                raycaster.far = moveDistance;
+                tempRaycaster.far = moveDistance;
 
-                const hits = raycaster.intersectObject(mesh, true);
+                const hits = tempRaycaster.intersectObject(tempMesh, true);
                 if (hits.length > 0) {
                     EventBus.emit("laserSystem:laserBlocked", { roomId, id: laser.id, position: laser.position });
                     lasers.splice(i, 1);

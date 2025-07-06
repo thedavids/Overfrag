@@ -4,6 +4,11 @@ import { EventBus } from '../shared/event-bus.js';
 
 export function createRocketSystem() {
     const activeRockets = {}; // roomId => [rocket]
+    const tempOrigin = new THREE.Vector3();
+    const tempDir = new THREE.Vector3();
+    const tempRaycaster = new THREE.Raycaster();
+    const tempMesh = new THREE.Mesh();
+    const tempRay = new THREE.Ray();
 
     function launchRocket(roomId, id, shooterId, origin, direction, position) {
         if (!activeRockets[roomId]) activeRockets[roomId] = [];
@@ -33,6 +38,8 @@ export function createRocketSystem() {
             if (!room) continue;
 
             const rockets = activeRockets[roomId];
+            const geometry = getBVHGeometry(room.map);
+            tempMesh.geometry = geometry;
 
             for (let i = rockets.length - 1; i >= 0; i--) {
                 const rocket = rockets[i];
@@ -45,7 +52,12 @@ export function createRocketSystem() {
                 rocket.lastUpdate = now;
 
                 const moveDist = rocket.speed * (deltaMs / 1000);
-                rocket.prevPosition = { ...rocket.position };
+
+                // Copy current position to prevPosition (reuse object)
+                rocket.prevPosition = rocket.prevPosition || { x: 0, y: 0, z: 0 };
+                rocket.prevPosition.x = rocket.position.x;
+                rocket.prevPosition.y = rocket.position.y;
+                rocket.prevPosition.z = rocket.position.z;
 
                 rocket.position.x += rocket.direction.x * moveDist;
                 rocket.position.y += rocket.direction.y * moveDist;
@@ -55,7 +67,7 @@ export function createRocketSystem() {
                 let hitPlayerId = null;
                 let explosionPos = { ...rocket.position };
 
-                // Check player hits
+                // === Check player hit ===
                 for (const [pid, player] of Object.entries(room.players)) {
                     if (pid === rocket.shooterId) continue;
 
@@ -73,26 +85,25 @@ export function createRocketSystem() {
                     }
                 }
 
-                // Check wall hit
-                const ray = new THREE.Ray(
-                    new THREE.Vector3(rocket.prevPosition.x, rocket.prevPosition.y, rocket.prevPosition.z),
-                    new THREE.Vector3(rocket.direction.x, rocket.direction.y, rocket.direction.z).normalize()
-                );
+                // === Check wall hit ===
+                tempOrigin.set(rocket.prevPosition.x, rocket.prevPosition.y, rocket.prevPosition.z);
+                tempDir.set(rocket.direction.x, rocket.direction.y, rocket.direction.z).normalize();
+                tempRay.origin.copy(tempOrigin);
+                tempRay.direction.copy(tempDir);
 
-                const raycaster = new THREE.Raycaster(ray.origin, ray.direction, 0, moveDist);
-                const mesh = new THREE.Mesh(getBVHGeometry(room.map));
+                tempRaycaster.ray.copy(tempRay);
+                tempRaycaster.far = moveDist;
 
-                const hits = raycaster.intersectObject(mesh, true);
+                const hits = tempRaycaster.intersectObject(tempMesh, true);
                 if (hits.length > 0) hitWall = true;
 
                 const shouldExplode = hitWall || hitPlayerId || rocket.life <= 0;
                 if (shouldExplode) {
                     rockets.splice(i, 1);
 
-                    // Area-of-effect damage
+                    // Area damage
                     for (const [pid, player] of Object.entries(room.players)) {
                         const dist = MathUtils.distanceVec3(player.position, explosionPos);
-
                         if (dist <= rocket.radius) {
                             let damage = 0;
                             if (pid !== rocket.shooterId) {
@@ -100,7 +111,12 @@ export function createRocketSystem() {
                                 player.health = (player.health || 100) - damage;
 
                                 if (player.health <= 0) {
-                                    EventBus.emit("playerDied", { roomId, playerId: pid, shooterId: rocket.shooterId, message: "was rocketed" });
+                                    EventBus.emit("playerDied", {
+                                        roomId,
+                                        playerId: pid,
+                                        shooterId: rocket.shooterId,
+                                        message: "was rocketed"
+                                    });
                                 }
                             }
 
@@ -115,7 +131,11 @@ export function createRocketSystem() {
                         }
                     }
 
-                    EventBus.emit("rocketSystem:rocketExploded", { roomId, id: rocket.id, position: explosionPos });
+                    EventBus.emit("rocketSystem:rocketExploded", {
+                        roomId,
+                        id: rocket.id,
+                        position: explosionPos
+                    });
                 }
             }
         }
