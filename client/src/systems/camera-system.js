@@ -68,23 +68,27 @@ export function createCameraSystem({ scene, inputSystem }) {
             const player = gameState.players[id];
             if (id === gameState.playerId) continue;
 
-            const bbox = new THREE.Box3().setFromObject(player);
-            if (!bbox.isEmpty()) {
-                const hit = tempRaycaster.ray.intersectBox(bbox, new THREE.Vector3());
-                if (hit) {
-                    const dist = origin.distanceTo(hit);
-                    if (dist < nearestPlayerDist) {
-                        nearestPlayerDist = dist;
-                        hitPlayer = player;
-                        hitPlayerPoint = hit.clone();
-                    }
+            const playerPos = player.position.clone(); // World position of the player
+            const bbox = new THREE.Box3().setFromCenterAndSize(
+                playerPos.clone().add(new THREE.Vector3(0, 0.5, 0)), // center (chest height)
+                new THREE.Vector3(1, 2, 1) // width, height, depth — adjust as needed
+            );
+
+            const hit = tempRaycaster.ray.intersectBox(bbox, new THREE.Vector3());
+            if (hit) {
+                const dist = origin.distanceTo(hit);
+                if (dist < nearestPlayerDist) {
+                    nearestPlayerDist = dist;
+                    hitPlayer = player;
+                    hitPlayerPoint = hit.clone();
                 }
             }
         }
 
         // Final decision
+        let worldHitPointDist = worldHitPoint != null ? origin.distanceTo(worldHitPoint) : null;
         let finalPoint = origin.clone().add(direction.clone().multiplyScalar(maxDistance));
-        if (worldHitPoint && (!hitPlayerPoint || origin.distanceTo(worldHitPoint) < nearestPlayerDist)) {
+        if (worldHitPoint && (!hitPlayerPoint || worldHitPointDist < nearestPlayerDist)) {
             finalPoint = worldHitPoint.clone();
         } else if (hitPlayerPoint) {
             finalPoint = hitPlayerPoint.clone();

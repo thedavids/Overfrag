@@ -29,10 +29,11 @@ export function createLaserSystem({ scene, cameraSystem }) {
 
         let muzzle = gameState.playerObj.position.clone()
             .add(new THREE.Vector3(0, 0.5, 0))
-            .add(forward.multiplyScalar(5));
+            .add(forward.clone().multiplyScalar(1.5));
+
         let shootDir = targetPoint.clone().sub(muzzle).normalize();
         const distance = shootDir.length();
-        const minDistance = 0.5;
+        const minDistance = 1.0;
 
         if (distance < minDistance) {
             shootDir = forward.clone();
