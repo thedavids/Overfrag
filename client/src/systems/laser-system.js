@@ -32,7 +32,7 @@ export function createLaserSystem({ scene, cameraSystem }) {
             .add(forward.multiplyScalar(5));
         let shootDir = targetPoint.clone().sub(muzzle).normalize();
         const distance = shootDir.length();
-        const minDistance = 1.0;
+        const minDistance = 0.5;
 
         if (distance < minDistance) {
             shootDir = forward.clone();
