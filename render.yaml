@@ -1,4 +1,3 @@
-# Preallocated game server instance (not a lobby)
 services:
   - type: web
     name: MultiPlayerBackend-GameInstance-01
@@ -8,7 +7,7 @@ services:
     region: ohio
     buildCommand: npm install
     startCommand: npm run start
-    autoDeployTrigger: commit
+    autoDeploy: false
     rootDir: server/game
     envVars:
       - key: IS_LOBBY
@@ -19,3 +18,23 @@ services:
         value: https://multiplayerbackend-gameinstance-01.onrender.com
       - key: PORT
         value: 3001
+
+  - type: web
+    name: MultiPlayerBackend-GameInstance-02
+    runtime: node
+    repo: https://github.com/thedavids/Overfrag
+    plan: starter
+    region: ohio
+    buildCommand: npm install
+    startCommand: npm run start
+    autoDeploy: false
+    rootDir: server/game
+    envVars:
+      - key: IS_LOBBY
+        value: "false"
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_SERVER_URL
+        value: https://multiplayerbackend-gameinstance-02.onrender.com
+      - key: PORT
+        value: 3002
