@@ -19,5 +19,13 @@ export const EventBus = (() => {
     }
   }
 
-  return { on, off, emit };
+  function once(event, handler) {
+    const wrapper = (data) => {
+      off(event, wrapper);
+      handler(data);
+    };
+    on(event, wrapper);
+  }
+
+  return { on, off, emit, once };
 })();
