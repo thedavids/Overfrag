@@ -5,9 +5,9 @@ export function createInstancesSystem(roomsSystem) {
     const IS_LOBBY = process.env.IS_LOBBY !== "false";
     process.env.PORT = process.env.PORT || "3000";
     const PORT = parseInt(process.env.PORT, 10);
-    const MAIN_INSTANCE_URL = process.env.LOBBY_URL || process.env.PUBLIC_SERVER_URL || `http://localhost:${PORT}`;
+    const MAIN_INSTANCE_URL = process.env.LOBBY_URL || `http://localhost:${PORT}`;
 
-    const MAX_ROOMS_PER_INSTANCE = 20;
+    const MAX_ROOMS_PER_INSTANCE = process.env.MAX_ROOMS_PER_INSTANCE || 10;
     const NODE_ENV = process.env.NODE_ENV?.toLowerCase?.() || "development";
     const isLocal = NODE_ENV !== "production";
     let nextPort = PORT + 1;
