@@ -7,7 +7,7 @@ export function createInstancesSystem(roomsSystem) {
     const PORT = parseInt(process.env.PORT, 10);
     const MAIN_INSTANCE_URL = process.env.LOBBY_URL || process.env.PUBLIC_SERVER_URL || `http://localhost:${PORT}`;
 
-    const MAX_ROOMS_PER_INSTANCE = 1;
+    const MAX_ROOMS_PER_INSTANCE = 20;
     const NODE_ENV = process.env.NODE_ENV?.toLowerCase?.() || "development";
     const isLocal = NODE_ENV !== "production";
     let nextPort = PORT + 1;
@@ -20,7 +20,7 @@ export function createInstancesSystem(roomsSystem) {
         'https://multiplayerbackend-gameinstance-01.onrender.com',
         'https://multiplayerbackend-gameinstance-02.onrender.com'
     ];
-    
+
     const RENDER_API_KEY = process.env.RENDER_API_KEY;
     const RENDER_SERVICE_IDS = {
         "https://multiplayerbackend-gameinstance-01.onrender.com": "srv-d1nd5n3uibrs73ffukn0?key=WYxruOCMUAo",
