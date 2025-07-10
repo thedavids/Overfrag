@@ -144,21 +144,30 @@ const NetworkSystem = (() => {
         }
     }
 
-    function connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName) {
+    async function connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName) {
         if (gameSocket) {
             gameSocket.disconnect();
             gameSocket = null;
         }
 
-        gameSocket = io(roomUrl, {
-            query: { roomId, name: playerName, modelName, mapName }
-        });
+        return new Promise((resolve, reject) => {
+            gameSocket = io(roomUrl, {
+                query: { roomId, name: playerName, modelName, mapName }
+            });
 
-        gameSocket.on("connect", () => {
-            PlayerSystem.setLocalPlayer(gameSocket.id, playerName, health);
-            setupGameSocketListeners();
-            lastHeartbeat = Date.now();
-            lastServerResponse = Date.now();
+            gameSocket.on("connect", () => {
+                PlayerSystem.setLocalPlayer(gameSocket.id, playerName, health);
+                setupGameSocketListeners();
+                lastHeartbeat = Date.now();
+                lastServerResponse = Date.now();
+                resolve();
+            });
+
+            gameSocket.on("connect_error", (err) => {
+                console.error("Connection error:", err.message);
+                UISystem.showError("Unable to join game: " + err.message);
+                reject(err);
+            });
         });
     }
 
@@ -385,8 +394,14 @@ const GameSystem = (() => {
     }
 
     async function connectToGame(roomUrl, playerName, modelName, health, mapName) {
-        return new Promise((resolve) => {
-            NetworkSystem.connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName);
+        return new Promise(async (resolve, reject) => {
+            try {
+                await NetworkSystem.connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName);
+            }
+            catch (err) {
+                console.warn("Game socket failed to connect:", err.message);
+                return reject(err);
+            }
 
             EventBus.once("map:loaded", () => {
                 const pid = NetworkSystem.getGameSocket().id;

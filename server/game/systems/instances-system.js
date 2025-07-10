@@ -68,7 +68,7 @@ export function createInstancesSystem(roomsSystem) {
         // Start the instance via Render API
         try {
             const res = await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
-                method: 'POST',
+                method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${RENDER_API_KEY}`,
                     'Content-Type': 'application/json'
@@ -111,7 +111,7 @@ export function createInstancesSystem(roomsSystem) {
             if (serviceId) {
                 try {
                     const res = await fetch(`https://api.render.com/v1/services/${serviceId}/suspend`, {
-                        method: 'POST',
+                        method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${RENDER_API_KEY}`,
                             'Content-Type': 'application/json'
