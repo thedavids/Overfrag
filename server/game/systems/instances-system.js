@@ -80,6 +80,9 @@ export function createInstancesSystem(roomsSystem) {
     }
 
     async function shutdownInstance(url) {
+        
+        console.log(`shutdownInstance start for instance: ${url}`);
+
         const entry = instanceRegistry[url];
         if (!entry || url === MAIN_INSTANCE_URL) return;
 
@@ -89,6 +92,9 @@ export function createInstancesSystem(roomsSystem) {
         }
         else if (!isLocal) {
             const serviceId = RENDER_SERVICE_IDS[url];
+
+            console.log(`shutdownInstance start for serviceId: ${serviceId}`);
+            
             if (serviceId) {
                 try {
                     const res = await fetch(`https://api.render.com/v1/services/${serviceId}/suspend`, {
