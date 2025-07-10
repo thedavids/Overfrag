@@ -59,7 +59,7 @@ export function createEffectSystem({ scene }) {
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
-      texture.encoding = THREE.sRGBEncoding;
+      texture.colorSpace = THREE.SRGBColorSpace;
       return texture;
     }
     return {

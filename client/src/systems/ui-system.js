@@ -71,7 +71,16 @@ export function createUISystem({
         }
     });
 
-    EventBus.on("player:died", ({ message }) => showServerMessage(message));
+    EventBus.on("player:died", ({ playerId, message, stats }) => {
+        showServerMessage(message);
+        if (playerId === gameState.playerId && stats && Array.isArray(stats)) {
+            showStatsOverlay(stats); // This should render the stats to the UI
+
+            setTimeout(() => {
+                hideStatsOverlay(); // This should remove/hide the overlay
+            }, 2000);
+        }
+    });
     EventBus.on("game:message", ({ message }) => showServerMessage(message));
 
     function createHud() {
@@ -198,6 +207,31 @@ export function createUISystem({
         setTimeout(() => el.remove(), 3000);
     }
 
+    function validatePlayerName() {
+        const name = playerNameInput.value.trim();
+
+        if (!name) {
+            playerNameInput.classList.add("invalid-input");
+            return false;
+        }
+
+        playerNameInput.classList.remove("invalid-input");
+        return true;
+    }
+
+    function showStatsOverlay(stats) {
+        const overlay = document.getElementById("statsOverlay");
+        overlay.innerHTML = stats.map(p =>
+            `<div>${p.name} — ${p.kill}K / ${p.death}D (KD: ${p.kdratio.toFixed(2)})</div>`
+        ).join("");
+        overlay.style.display = "flex"; // Use flex for centering
+    }
+
+    function hideStatsOverlay() {
+        const overlay = document.getElementById("statsOverlay");
+        overlay.style.display = "none";
+    }
+
     return {
         init,
         showGameUI,
@@ -209,6 +243,7 @@ export function createUISystem({
         populateMapList,
         getSelectedMap,
         renderRoomList,
+        validatePlayerName,
         getHudScene: () => hudScene,
         getCrosshair: () => crosshair,
         updateCrosshairPosition

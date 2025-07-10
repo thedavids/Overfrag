@@ -19,6 +19,11 @@ export function createRoomsSystem({ mapUtils }) {
         return null;
     }
 
+    function generateRoomId() {
+        const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
+        return roomId;
+    }
+
     function getRoomsByIdAndPlayersCount() {
         const availableRooms = Object.entries(getRooms()).map(([id, room]) => ({
             id,
@@ -27,10 +32,24 @@ export function createRoomsSystem({ mapUtils }) {
         return availableRooms;
     }
 
-    async function createRoom({ name, modelName, mapName }) {
+    async function createRoomLobby({ roomId, name, modelName }) {
         const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
         const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
-        const roomId = `room-${Math.random().toString(36).substr(2, 6)}`;
+
+        rooms[roomId] = {
+            players: {},
+            map: null,
+            isLobby: true
+        };
+
+        EventBus.emit("roomsSystem:roomCreated", { roomId });
+
+        return { roomId, safeName, safeModel };
+    }
+
+    async function createRoomGame({ roomId, name, modelName, mapName }) {
+        const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
+        const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
 
         let mapNameToLoad = safeName.toLowerCase() === 'q2dm1'
             ? safeName.toLowerCase()
@@ -49,7 +68,8 @@ export function createRoomsSystem({ mapUtils }) {
 
         rooms[roomId] = {
             players: {},
-            map
+            map,
+            isLobby: false
         };
 
         EventBus.emit("roomsSystem:roomCreated", { roomId });
@@ -62,7 +82,10 @@ export function createRoomsSystem({ mapUtils }) {
             name,
             modelName,
             position: { x: 0, y: 0, z: 0 },
-            health: 100
+            health: 100,
+            kill: 0,
+            death: 0,
+            kdratio: 0
         };
 
         EventBus.emit("roomsSystem:playerConnected", { roomId, socketId, name });
@@ -112,9 +135,11 @@ export function createRoomsSystem({ mapUtils }) {
         getRooms,
         getRoomsByIdAndPlayersCount,
         hasRoom,
+        generateRoomId,
         getPlayerRoom,
         getPlayers,
-        createRoom,
+        createRoomLobby,
+        createRoomGame,
         addPlayer,
         removePlayer,
         setLastSeen,

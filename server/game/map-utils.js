@@ -10,9 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const maps = {
+    anotherCity: { "name": "Detailed City" },
     default: { "name": "Jump Arena" },
     city: { "name": "City" },
-    anotherCity: { "name": "Detailed City" },
     giganticCity: { "name": "Gigantic City" },
     blockTown: { "name": "Block Town" }
 };

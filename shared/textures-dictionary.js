@@ -15,7 +15,7 @@ export const TexturesDictionary = (() => {
       loader.load(
         path,
         (texture) => {
-          texture.encoding = options.encoding || THREE.sRGBEncoding;
+          texture.colorSpace = options.colorSpace || THREE.SRGBColorSpace;
           texture.wrapS = options.wrapS || THREE.ClampToEdgeWrapping;
           texture.wrapT = options.wrapT || THREE.ClampToEdgeWrapping;
           texture.magFilter = options.magFilter || THREE.LinearFilter;

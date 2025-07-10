@@ -18,13 +18,10 @@ import { createInputSystem } from './systems/input-system.js';
 import { createGrappleSystem } from './systems/grapple-system.js';
 import { createPlayerSystem } from './systems/player-system.js';
 import { createUISystem } from './systems/ui-system.js';
-
 import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { io } from 'socket.io-client';
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-// Socket setup
-const socket = io(import.meta.env.VITE_SOCKET_URL);
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 // Three.js setup
 const scene = new THREE.Scene();
@@ -117,59 +114,103 @@ const PlayerSystem = createPlayerSystem({ inputSystem: InputSystem, grappleSyste
 
 // === NetworkSystem Begin ===
 const NetworkSystem = (() => {
+    let lobbySocket = null;
+    let gameSocket = null;
+
     let lastHeartbeat = 0;
     let lastServerResponse = 0;
 
     function init() {
-        socket.on("connect", onConnect);
-        socket.on("playerList", handlePlayerList);
-        socket.on("playerMoved", handlePlayerMoved);
-        socket.on("playerDisconnected", handlePlayerDisconnected);
+        lobbySocket = io(import.meta.env.VITE_SOCKET_URL);
 
-        socket.on("loadMap", MapSystem.loadMap);
-        socket.on("laserHit", WeaponSystem.handleHit);
-        socket.on("laserFired", LaserSystem.handleFired);
-        socket.on("laserBlocked", LaserSystem.handleBlocked);
-
-        socket.on("machinegunBlocked", MachineGunSystem.handleBlocked);
-        socket.on("machinegunHit", MachineGunSystem.handleHit);
-
-        socket.on("shotgunBlocked", ShotgunSystem.handleBlocked);
-        socket.on("shotgunHit", ShotgunSystem.handleHit);
-
-        socket.on("rocketHit", RocketSystem.handleHit);
-        socket.on("rocketLaunched", RocketSystem.handleLaunched);
-        socket.on("rocketExploded", RocketSystem.handleExploded);
-
-        socket.on("healthPackTaken", MapSystem.healthPackTaken);
-        socket.on("healthPackRespawned", MapSystem.healthPackRespawned);
-
-        socket.on("remoteGrappleStart", ({ playerId, origin, direction }) => {
-            const playerObj = GameSystem.getPlayer(playerId);
-            GrappleSystem.remoteGrappleStart({ playerId, origin, direction, playerObj });
-        });
-        socket.on("remoteGrappleEnd", GrappleSystem.remoteGrappleEnd);
-
-        socket.on("respawn", handleRespawn);
-        socket.on("playerDied", handlePlayerDied);
-        socket.on("serverMessage", handleServerMessage);
-        socket.on("heartbeatAck", handleHeartbeatAck);
-
-        // Start heartbeat loop
-        lastServerResponse = Date.now(); // ← initialize as alive now
-        lastHeartbeat = Date.now();
+        lobbySocket.on("connect", onLobbyConnect);
         setInterval(sendHeartbeatIfNeeded, 7500);
     }
 
-    function onConnect() {
-        refreshRoomList();
-
-        // Load maps on connect
-        socket.emit('getMaps', (maps) => {
+    function onLobbyConnect() {
+        lobbySocket.emit("getMaps", (maps) => {
             UISystem.populateMapList(maps);
-        })
+        });
 
         setInterval(refreshRoomList, 10000);
+        refreshRoomList();
+    }
+
+    function refreshRoomList() {
+        if (lobbySocket?.connected) {
+            lobbySocket.emit("getRooms", (rooms) => {
+                UISystem.renderRoomList(rooms, GameSystem.joinRoom);
+            });
+        }
+    }
+
+    function connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName) {
+        if (gameSocket) {
+            gameSocket.disconnect();
+            gameSocket = null;
+        }
+
+        gameSocket = io(roomUrl, {
+            query: { roomId, name: playerName, modelName, mapName }
+        });
+
+        gameSocket.on("connect", () => {
+            PlayerSystem.setLocalPlayer(gameSocket.id, playerName, health);
+            setupGameSocketListeners();
+            lastHeartbeat = Date.now();
+            lastServerResponse = Date.now();
+        });
+    }
+
+    function setupGameSocketListeners() {
+        gameSocket.on("playerList", handlePlayerList);
+        gameSocket.on("playerMoved", handlePlayerMoved);
+        gameSocket.on("playerDisconnected", handlePlayerDisconnected);
+        gameSocket.on("loadMap", async (map) => {
+            await MapSystem.loadMap(map);
+            EventBus.emit("map:loaded");
+        });
+
+        gameSocket.on("laserFired", LaserSystem.handleFired);
+        gameSocket.on("laserHit", WeaponSystem.handleHit);
+        gameSocket.on("laserBlocked", LaserSystem.handleBlocked);
+        gameSocket.on("machinegunBlocked", MachineGunSystem.handleBlocked);
+        gameSocket.on("machinegunHit", MachineGunSystem.handleHit);
+        gameSocket.on("shotgunBlocked", ShotgunSystem.handleBlocked);
+        gameSocket.on("shotgunHit", ShotgunSystem.handleHit);
+        gameSocket.on("rocketHit", RocketSystem.handleHit);
+        gameSocket.on("rocketLaunched", RocketSystem.handleLaunched);
+        gameSocket.on("rocketExploded", RocketSystem.handleExploded);
+        gameSocket.on("healthPackTaken", MapSystem.healthPackTaken);
+        gameSocket.on("healthPackRespawned", MapSystem.healthPackRespawned);
+        gameSocket.on("remoteGrappleStart", ({ playerId, origin, direction }) => {
+            const playerObj = GameSystem.getPlayer(playerId);
+            GrappleSystem.remoteGrappleStart({ playerId, origin, direction, playerObj });
+        });
+        gameSocket.on("remoteGrappleEnd", GrappleSystem.remoteGrappleEnd);
+        gameSocket.on("respawn", handleRespawn);
+        gameSocket.on("playerDied", handlePlayerDied);
+        gameSocket.on("serverMessage", handleServerMessage);
+        gameSocket.on("heartbeatAck", handleHeartbeatAck);
+    }
+
+    function sendHeartbeatIfNeeded() {
+        const now = Date.now();
+        if (gameSocket?.connected) {
+            if (now - lastServerResponse > 60000) {
+                console.warn("No heartbeatAck from game server. Leaving game.");
+                GameSystem.leaveGame();
+                return;
+            }
+            if (now - lastHeartbeat > 5000) {
+                gameSocket.emit("heartbeat");
+                lastHeartbeat = now;
+            }
+        }
+    }
+
+    function handleHeartbeatAck() {
+        lastServerResponse = Date.now();
     }
 
     function handlePlayerList(list) {
@@ -185,84 +226,53 @@ const NetworkSystem = (() => {
         const player = GameSystem.getPlayer(id);
         if (player) {
             player.position.set(position.x, position.y, position.z);
-            if (rotation) {
-                player.rotation.y = rotation.y;
-            }
+            if (rotation) player.rotation.y = rotation.y;
         }
-
-        EventBus.emit("player:animated", {
-            playerId: id,
-            isGrounded: isGrounded,
-            isIdle: isIdle
-        });
+        EventBus.emit("player:animated", { playerId: id, isGrounded, isIdle });
     }
 
     function handlePlayerDisconnected(id) {
         if (PlayerSystem.getLocalPlayerId() === id) {
             alert("Disconnected");
             GameSystem.leaveGame();
-        }
-        else {
+        } else {
             GameSystem.removePlayer(id);
         }
     }
 
     function handleRespawn({ playerId, position, health }) {
         const player = GameSystem.getPlayer(playerId);
-        if (!player) return;
-
-        player.visible = true;
-        player.position.set(position.x, position.y, position.z);
-
+        if (player) {
+            player.visible = true;
+            player.position.set(position.x, position.y, position.z);
+        }
         EventBus.emit("player:respawned", { playerId, position, health });
     }
 
-    function handlePlayerDied({ playerId, position, message }) {
+    function handlePlayerDied({ playerId, position, message, stats }) {
         const player = GameSystem.getPlayer(playerId);
-        if (player) {
-            player.visible = false; // Make the player invisible on death
-        }
-
-        EventBus.emit("player:died", { playerId, message, position });
+        if (player) player.visible = false;
+        EventBus.emit("player:died", { playerId, message, position, stats });
     }
 
     function handleServerMessage({ message }) {
         EventBus.emit("game:message", { message });
     }
 
-    function refreshRoomList() {
-        socket.emit("getRooms", (rooms) => {
-            UISystem.renderRoomList(rooms, GameSystem.joinRoom);
-        });
-    }
-
-    function sendHeartbeat() {
-        socket.emit("heartbeat");
-    }
-
-    function sendHeartbeatIfNeeded() {
-        const now = Date.now();
-
-        // If no ack in over 60 seconds, assume server is unresponsive
-        if (now - lastServerResponse > 60000) {
-            console.warn("No heartbeatAck from server in 60 seconds. Leaving game.");
-            GameSystem.leaveGame();
+    function emitToLobby(event, payload, callback) {
+        if (!lobbySocket?.connected) {
+            console.error("Lobby socket not connected");
             return;
         }
-
-        // Send a heartbeat if it's time
-        if (now - lastHeartbeat > 5000) {
-            sendHeartbeat();
-            lastHeartbeat = now;
-        }
+        lobbySocket.emit(event, payload, callback);
     }
 
-    function handleHeartbeatAck() {
-        lastServerResponse = Date.now();
+    function getGameSocket() {
+        return gameSocket;
     }
 
     EventBus.on("player:moved", ({ roomId, position, yaw, playerId, isGrounded, isIdle }) => {
-        socket.emit("move", {
+        gameSocket.emit("move", {
             roomId: roomId,
             position: { x: position.x, y: position.y, z: position.z },
             rotation: { x: 0, y: yaw, z: 0 },
@@ -272,7 +282,7 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:shot", ({ roomId, origin, direction, laserId }) => {
-        socket.emit('shoot', {
+        gameSocket.emit('shoot', {
             roomId: roomId,
             origin: origin,
             direction: direction,
@@ -281,7 +291,7 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:machinegunFire", ({ roomId, origin, direction }) => {
-        socket.emit('machinegunFire', {
+        gameSocket.emit('machinegunFire', {
             roomId: roomId,
             origin: origin,
             direction: direction
@@ -289,7 +299,7 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:shotgunFire", ({ roomId, origin, direction }) => {
-        socket.emit('shotgunFire', {
+        gameSocket.emit('shotgunFire', {
             roomId: roomId,
             origin: origin,
             direction: direction
@@ -297,7 +307,7 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:launchRocket", ({ roomId, origin, direction, rocketId }) => {
-        socket.emit('launchRocket', {
+        gameSocket.emit('launchRocket', {
             roomId: roomId,
             origin: origin,
             direction: direction,
@@ -306,7 +316,7 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:grappleStarted", ({ roomId, origin, direction }) => {
-        socket.emit('grappleStart', {
+        gameSocket.emit('grappleStart', {
             roomId: roomId,
             origin: origin,
             direction: direction
@@ -314,11 +324,15 @@ const NetworkSystem = (() => {
     });
 
     EventBus.on("player:grappleEnded", ({ roomId }) => {
-        socket.emit('grappleEnd', { roomId });
+        gameSocket.emit('grappleEnd', { roomId });
     });
 
+
     return {
-        init
+        init,
+        connectToGameSocket,
+        emitToLobby,
+        getGameSocket
     };
 })();
 NetworkSystem.init();
@@ -332,112 +346,76 @@ const GameSystem = (() => {
 
     async function createRoom() {
         const playerName = UISystem.getPlayerName();
-        if (!playerName) {
+        if (!UISystem.validatePlayerName()) {
             alert("Enter a name");
             throw new Error("Missing player name");
         }
 
         const mapName = UISystem.getSelectedMap();
+        const modelName = `Astronaut${Math.floor(Math.random() * 3) + 1}.glb`;
         UISystem.savePlayerName();
 
-        const index = Math.floor(Math.random() * 3) + 1;
-        const modelName = `Astronaut${index}.glb`;
-
-        // Wait for connection if needed
-        if (socket.disconnected) {
-            await new Promise(resolve => {
-                socket.once('connect', resolve);
-                socket.connect();
-            });
-        }
-
-        const { roomId: id, health } = await new Promise((resolve) => {
-            socket.emit('createRoom', { name: playerName, modelName, mapName }, resolve);
+        const { roomId: id, roomUrl, health } = await new Promise((resolve) => {
+            NetworkSystem.emitToLobby("createRoom", { name: playerName, modelName, mapName }, resolve);
         });
 
         roomId = id;
-        const pid = socket.id;
-        PlayerSystem.setLocalPlayer(pid, playerName, health);
-
-        await new Promise((resolve) => {
-            const waitForMap = setInterval(() => {
-                if (MapSystem.isLoaded()) {
-                    clearInterval(waitForMap);
-                    resolve();
-                }
-            }, 50);
-        });
-
-        const playerObj = addPlayer(pid, 0, 0, 0, playerName, modelName);
-        gameStarted = true;
-
-        const gameState = new GameState({
-            roomId, playerId: pid, playerObj,
-            octree: MapSystem.getOctree(), players: players, requiresPrecisePhysics: MapSystem.isRequiringPrecisePhysics()
-        });
-        EventBus.emit("game:started", gameState);
-        EventBus.emit("player:healthChanged", { playerId: pid, health });
+        await connectToGame(roomUrl, playerName, modelName, health, mapName);
     }
 
     async function joinRoom(idOverride = null) {
         const playerName = UISystem.getPlayerName();
-        const joinId = idOverride || UISystem.getRoomId();
-
-        if (!playerName || !joinId) {
-            alert("Enter name and room ID");
-            throw new Error("Missing player name or room ID");
+        if (!UISystem.validatePlayerName()) {
+            alert("Enter a name");
+            throw new Error("Missing player name");
         }
 
+        const joinId = idOverride || UISystem.getRoomId();
+        const modelName = `Astronaut${Math.floor(Math.random() * 3) + 1}.glb`;
         UISystem.savePlayerName();
-        const index = Math.floor(Math.random() * 3) + 1;
-        const modelName = `Astronaut${index}.glb`;
 
-        const { success, error, health } = await new Promise((resolve) => {
-            socket.emit('joinRoom', { roomId: joinId, name: playerName, modelName }, resolve);
+        const { roomUrl, health, error } = await new Promise((resolve) => {
+            NetworkSystem.emitToLobby("joinRoom", { roomId: joinId, name: playerName, modelName }, resolve);
         });
 
-        if (error) {
-            alert(error);
-            throw new Error(error);
-        }
+        if (error) throw new Error(error);
 
         roomId = joinId;
-        const pid = socket.id;
-        PlayerSystem.setLocalPlayer(pid, playerName, health);
+        await connectToGame(roomUrl, playerName, modelName, health, null);
+    }
 
-        await new Promise((resolve) => {
-            const waitForMap = setInterval(() => {
-                if (MapSystem.isLoaded()) {
-                    clearInterval(waitForMap);
-                    resolve();
-                }
-            }, 50);
+    async function connectToGame(roomUrl, playerName, modelName, health, mapName) {
+        return new Promise((resolve) => {
+            NetworkSystem.connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName);
+
+            EventBus.once("map:loaded", () => {
+                const pid = NetworkSystem.getGameSocket().id;
+                const playerObj = addPlayer(pid, 0, 0, 0, playerName, modelName);
+                gameStarted = true;
+
+                const gameState = new GameState({
+                    roomId,
+                    playerId: pid,
+                    playerObj,
+                    octree: MapSystem.getOctree(),
+                    players,
+                    requiresPrecisePhysics: MapSystem.isRequiringPrecisePhysics()
+                });
+
+                EventBus.emit("game:started", gameState);
+                EventBus.emit("player:healthChanged", { playerId: pid, health });
+                resolve();
+            });
         });
-
-        const playerObj = addPlayer(pid, 0, 0, 0, playerName, modelName);
-        gameStarted = true;
-
-        const gameState = new GameState({
-            roomId, playerId: pid, playerObj,
-            octree: MapSystem.getOctree(), players: players, requiresPrecisePhysics: MapSystem.isRequiringPrecisePhysics()
-        });
-        EventBus.emit("game:started", gameState);
-        EventBus.emit("player:healthChanged", { playerId: pid, health });
     }
 
     function leaveGame() {
-        for (const id in players) {
-            scene.remove(players[id]);
-        }
+        NetworkSystem.getGameSocket()?.disconnect();
+        for (const id in players) scene.remove(players[id]);
         Object.keys(players).forEach(id => delete players[id]);
-
         gameStarted = false;
         roomId = null;
-
         EventBus.emit("game:ended");
-
-        socket.disconnect();
-
         setTimeout(() => window.location.reload(), 500);
     }
 
@@ -460,7 +438,7 @@ const GameSystem = (() => {
 
             model.position.set(0, -0.5, 0); // local to group
             model.rotation.y = Math.PI;
-            model.scale.set(0.7, 0.7, 0.7); // optional: scale to match capsule
+            model.scale.set(0.7, 0.7, 0.7);
 
             model.traverse(child => {
                 if (child.isSkinnedMesh) {
@@ -478,12 +456,12 @@ const GameSystem = (() => {
                 const action = mixer.clipAction(cleaned);
                 group.userData.actions[clip.name.toLowerCase()] = action;
             }
-            playAnimation(group, 'idle');
 
-            group.add(model); // attach to capsule group
+            playAnimation(group, 'idle');
+            group.add(model);
         });
 
-        // === Add name tag (unchanged) ===
+        // === Add name tag for remote players ===
         if (id !== PlayerSystem.getLocalPlayerId()) {
             const nameTag = createNameTag(name);
             nameTag.position.set(0, capsuleHeight + 0.5, 0);
@@ -582,47 +560,27 @@ const GameSystem = (() => {
         }
     }
 
-    function removePlayer(id) {
-        if (players[id]) {
-            scene.remove(players[id]);
-            delete players[id];
-        }
-    }
-
-    function getPlayer(id) {
-        return players[id];
-    }
-
-    function isGameStarted() {
-        return gameStarted;
-    }
-
-    function getRoomId() {
-        return roomId;
-    }
-
-    function update(delta) {
-        // Make all name tags face the camera
-        for (const id in players) {
-            const player = players[id];
-            if (player && player.userData.nameTag) {
-                player.userData.nameTag.lookAt(CameraSystem.getCamera().position);
-            }
-            const mixer = player?.userData?.mixer;
-            if (mixer) mixer.update(delta);
-        }
-    }
-
     return {
         createRoom,
         joinRoom,
         leaveGame,
+        getPlayer: id => players[id],
+        isGameStarted: () => gameStarted,
+        getRoomId: () => roomId,
+        update: delta => {
+            for (const id in players) {
+                const player = players[id];
+                player?.userData.nameTag?.lookAt(CameraSystem.getCamera().position);
+                player?.userData.mixer?.update(delta);
+            }
+        },
         addPlayer,
-        removePlayer,
-        getPlayer,
-        isGameStarted,
-        getRoomId,
-        update
+        removePlayer: id => {
+            if (players[id]) {
+                scene.remove(players[id]);
+                delete players[id];
+            }
+        }
     };
 })();
 // === GameSystem End ===

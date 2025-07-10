@@ -1,26 +1,21 @@
 import http from 'http';
+import express from 'express';
 import { Server } from 'socket.io';
-import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+
+import { acceleratedRaycast } from 'three-mesh-bvh';
 import * as THREE from 'three';
-import * as MathUtils from './math-utils.js';
+
 import * as MapUtils from './map-utils.js';
 import { EventBus } from './shared/event-bus.js';
-
 import { createLaserSystem } from './systems/laser-system.js';
 import { createMachineGunSystem } from './systems/machinegun-system.js';
 import { createShotgunSystem } from './systems/shotgun-system.js';
 import { createRocketSystem } from './systems/rocket-system.js';
 import { createHealthPacksSystem } from './systems/healthpacks-system.js';
 import { createRoomsSystem } from './systems/rooms-system.js';
+import { createInstancesSystem } from './systems/instances-system.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
-
-const server = http.createServer();
-const io = new Server(server, {
-    cors: {
-        origin: '*'
-    }
-});
 
 process.on("uncaughtException", err => {
     console.error("UNCAUGHT EXCEPTION:", err);
@@ -95,13 +90,26 @@ EventBus.on("healthPacksSystem:healthPackRespawned", ({ roomId, id }) => {
 // roomsSystem
 const roomsSystem = createRoomsSystem({ mapUtils: MapUtils });
 
+EventBus.on("roomsSystem:playerConnected", ({ roomId, socketId, name }) => {
+    if (instancesSystem.isLobby() === false) {
+        console.log(`roomsSystem:playerConnected`);
+        instancesSystem.reportToLobby('player-joined', { roomId, playerId: socketId, isLobby: instancesSystem.isLobby() });
+    }
+    io.to(roomId).emit('serverMessage', { roomId, message: `${name} joined the game.` });
+});
+
 EventBus.on("roomsSystem:playerDisconnected", ({ roomId, socketId, name }) => {
+    if (instancesSystem.isLobby() === false) {
+        console.log(`roomsSystem:playerDisconnected`);
+        instancesSystem.reportToLobby('player-left', { roomId, playerId: socketId, isLobby: instancesSystem.isLobby() });
+    }
     io.to(roomId).emit('serverMessage', { message: `${name} left the game.` });
     io.to(roomId).emit('playerDisconnected', socketId);
     console.log(`Client disconnected: ${name} ${socketId}`);
 });
 
 EventBus.on("roomsSystem:roomDeleted", ({ roomId }) => {
+    instancesSystem.deallocateRoomInstance(roomId);
     console.warn("Room deleted:", roomId);
 });
 
@@ -110,12 +118,78 @@ EventBus.on("serverMessage", ({ roomId, message }) => {
 });
 
 EventBus.on("playerDied", ({ roomId, playerId, shooterId, message }) => {
+
+    let room = roomsSystem.getRooms()[roomId];
+    if (playerId !== shooterId && room.players?.[shooterId] != null) {
+        room.players[shooterId].kill++;
+        const death = room.players[shooterId].death;
+        room.players[shooterId].kdratio = room.players[shooterId].kill / (death <= 0 ? 1 : death);
+
+    }
+    if (room.players?.[playerId] != null) {
+        room.players[playerId].death++;
+        room.players[playerId].kdratio = room.players[playerId].kill / room.players[playerId].death;
+    }
+
     respawnPlayer(roomId, playerId, shooterId, message);
 });
 
-// socket setup
+// instances manager
+const instancesSystem = createInstancesSystem(roomsSystem);
+
+// http end point
+process.env.PORT = process.env.PORT || "3000";
+const PORT = parseInt(process.env.PORT, 10);
+
+let server = http.createServer();
+if (instancesSystem.isLobby()) {
+    const app = express();
+    app.use(express.json()); // For JSON body parsing
+
+    // Add internal POST endpoints
+    app.post('/internal/player-joined', (req, res) => {
+        const { roomId, playerId, isLobby } = req.body;
+        if (isLobby === false) {
+            roomsSystem.addPlayer(roomId, playerId, {
+                name: '',
+                modelName: ''
+            });
+        }
+        console.log(`[/internal/player-joined] Player joined: ${playerId} → ${roomId} @isLobby ${isLobby}`);
+        res.sendStatus(200);
+    });
+
+    app.post('/internal/player-left', (req, res) => {
+        const { roomId, playerId, isLobby } = req.body;
+        roomsSystem.removePlayer(playerId);
+        console.log(`[/internal/player-left] Player left: ${playerId} → ${roomId} @isLobby ${isLobby}`);
+        res.sendStatus(200);
+    });
+    server = http.createServer(app);
+}
+else {
+    server = http.createServer();
+}
+
+const io = new Server(server, {
+    cors: {
+        origin: '*'
+    }
+});
+
 io.on('connection', (socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    const { roomId, name, modelName, mapName } = socket.handshake.query;
+
+    if (roomId && name && modelName) {
+        handleGameSocket(socket, roomId, name, modelName, mapName);
+    }
+    else {
+        handleLobbySocket(socket);
+    }
+});
+
+function handleLobbySocket(socket) {
+    console.log(`[LOBBY] Client connected: ${socket.id}`);
 
     socket.on('getMaps', (callback) => {
         const availableMaps = MapUtils.getAvailableMaps();
@@ -128,63 +202,99 @@ io.on('connection', (socket) => {
     });
 
     socket.on('createRoom', async ({ name, modelName, mapName }, callback) => {
-
         if (typeof name !== 'string' || typeof modelName !== 'string') {
             return callback({ error: 'Invalid input' });
         }
 
-        const { roomId, safeName, safeModel, map } = await roomsSystem.createRoom({ name, modelName, mapName });
+        const roomId = roomsSystem.generateRoomId();
+        const roomUrl = await instancesSystem.allocateRoomInstance(roomId);
+        await roomsSystem.createRoomLobby({ roomId, name, modelName });
 
-        roomsSystem.addPlayer(roomId, socket.id, {
-            name: safeName,
-            modelName: safeModel
-        });
-
-        socket.join(roomId);
-        socket.emit("loadMap", MapUtils.toClientMap(map));
-        callback({ roomId, health: 100 });
-
-        const room = roomsSystem.getRooms()[roomId];
-        io.to(roomId).emit('playerList', room.players);
+        callback({ roomId, roomUrl, health: 100 });
     });
 
     socket.on('joinRoom', ({ roomId, name, modelName }, callback) => {
-        if (!roomsSystem.hasRoom(roomId)) return callback({ error: 'Room not found' });
+        if (!roomsSystem.hasRoom(roomId)) {
+            return callback({ error: 'Room not found' });
+        }
 
         if (typeof name !== 'string' || typeof modelName !== 'string') {
             return callback({ error: 'Invalid input' });
         }
 
-        const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
-        const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
+        const roomUrl = instancesSystem.getRoomInstanceUrl(roomId);
+        if (!roomUrl) {
+            return callback({ error: 'Room instance not available' });
+        }
 
-        roomsSystem.addPlayer(roomId, socket.id, {
-            name: safeName,
-            modelName: safeModel
-        });
-
-        socket.join(roomId);
-
-        const room = roomsSystem.getRooms()[roomId];
-        socket.emit("loadMap", MapUtils.toClientMap(room.map));
-        callback({ success: true, health: 100 });
-
-        io.to(roomId).emit('playerList', room.players);
-        EventBus.emit("serverMessage", { roomId, message: `${safeName} joined the game.` });
+        callback({ roomUrl, success: true, health: 100 });
     });
+}
+
+function rejectGameSocketConnection(socket, reason, roomId) {
+    console.warn(reason, socket.id);
+
+    instancesSystem.reportToLobby('player-left', {
+        roomId,
+        playerId: socket.id,
+        isLobby: instancesSystem.isLobby()
+    });
+
+    socket.disconnect();
+}
+
+async function handleGameSocket(socket, roomId, name, modelName, mapName) {
+    console.log(`[GAME] Client joined room ${roomId}: ${socket.id}`);
+
+    if (!roomId || typeof name !== 'string' || typeof modelName !== 'string') {
+        rejectGameSocketConnection(socket, "[GAME] Invalid room connection query", roomId);
+        return;
+    }
+
+    const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
+    const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
+
+    let room = roomsSystem.getRooms()[roomId];
+
+    if (!room || room.isLobby) {
+        if (process.env.PORT != PORT) {
+            rejectGameSocketConnection(socket, `[GAME] Rejected room creation on non-lobby instance for ${roomId}`, roomId);
+            return;
+        }
+
+        if (typeof mapName !== 'string') {
+            rejectGameSocketConnection(socket, "[GAME] Invalid room connection query (mapName is null)", roomId);
+            return;
+        }
+
+        await roomsSystem.createRoomGame({ roomId, name, modelName, mapName });
+        room = roomsSystem.getRooms()[roomId];
+        console.log(`[GAME] Creating room ${roomId}`);
+    }
+
+    socket.join(roomId);
+    socket.emit("loadMap", MapUtils.toClientMap(room.map));
+
+    roomsSystem.addPlayer(roomId, socket.id, {
+        name: safeName,
+        modelName: safeModel
+    });
+
+    io.to(roomId).emit("playerList", room.players);
 
     socket.on("heartbeat", () => {
         roomsSystem.setLastSeen(socket.id);
         socket.emit("heartbeatAck");
     });
 
-    socket.on('move', ({ roomId, position, rotation, isIdle, isGrounded }) => {
-        if (!roomId || !position) return;
-        const room = roomsSystem.getRooms()[roomId];
-        if (!room || !room.players[socket.id]) return;
+    socket.on('move', ({ position, rotation, isIdle, isGrounded }) => {
+        if (!position || !room.players) return;
+        const player = room.players[socket.id];
+        if (!player) return;
 
-        room.players[socket.id].position = position;
-        room.players[socket.id].rotation = rotation;
+
+        player.position = position;
+        player.rotation = rotation;
 
         socket.to(roomId).emit('playerMoved', {
             id: socket.id,
@@ -193,55 +303,37 @@ io.on('connection', (socket) => {
             isIdle,
             isGrounded
         });
+
         healthPacksSystem.tryPickupHealthPack(roomId, room, socket.id);
 
-        if (position.y < -100 && room.players[socket.id].health > 0 && !room.players[socket.id].isDead) {
-            room.players[socket.id].health = 0;
-            room.players[socket.id].isDead = true;
+        if (position.y < -100 && player.health > 0 && !player.isDead) {
+            player.health = 0;
+            player.isDead = true;
             respawnPlayer(roomId, socket.id, socket.id, 'fell to his death', 100);
         }
     });
 
-    socket.on('shoot', ({ roomId, origin, direction, id }) => {
-        // Validate input
-        if (!roomId || !origin || !direction || typeof id !== 'string') return;
-        const room = roomsSystem.getRooms()[roomId];
-        if (!room || !room.players[socket.id]) return;
-
+    socket.on('shoot', ({ origin, direction, id }) => {
+        if (!origin || !direction || typeof id !== 'string') return;
         laserSystem.spawnLaser(roomId, socket.id, origin, direction, id);
     });
 
-    socket.on("machinegunFire", ({ roomId, origin, direction }) => {
-        // Validate input
-        if (!roomId || !origin || !direction) return;
-        const room = roomsSystem.getRooms()[roomId];
-        if (!room || !room.players[socket.id]) return;
-
+    socket.on("machinegunFire", ({ origin, direction }) => {
+        if (!origin || !direction) return;
         machinegunSystem.fire({ roomId, room, shooterId: socket.id, origin, direction }, map => map.bvhMesh);
     });
 
-    socket.on("shotgunFire", ({ roomId, origin, direction }) => {
-        // Validate input
-        if (!roomId || !origin || !direction) return;
-        const room = roomsSystem.getRooms()[roomId];
-        if (!room || !room.players[socket.id]) return;
-
+    socket.on("shotgunFire", ({ origin, direction }) => {
+        if (!origin || !direction) return;
         shotgunSystem.fire({ roomId, room, shooterId: socket.id, origin, direction }, map => map.bvhMesh);
     });
 
-    socket.on('launchRocket', ({ roomId, origin, direction, id }) => {
-        if (!roomId || !origin || !direction || typeof id !== 'string') return;
-        const room = roomsSystem.getRooms()[roomId];
-        if (!room || !room.players[socket.id]) return;
-
+    socket.on('launchRocket', ({ origin, direction, id }) => {
+        if (!origin || !direction || typeof id !== 'string') return;
         rocketSystem.launchRocket(roomId, id, socket.id, origin, direction, { ...origin });
     });
 
-    socket.on('disconnect', () => {
-        roomsSystem.removePlayer(socket.id);
-    });
-
-    socket.on('grappleStart', ({ roomId, origin, direction }) => {
+    socket.on('grappleStart', ({ origin, direction }) => {
         socket.to(roomId).emit('remoteGrappleStart', {
             playerId: socket.id,
             origin,
@@ -249,12 +341,17 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('grappleEnd', ({ roomId }) => {
+    socket.on('grappleEnd', () => {
         socket.to(roomId).emit('remoteGrappleEnd', {
             playerId: socket.id
         });
     });
-});
+
+    socket.on('disconnect', () => {
+        roomsSystem.removePlayer(socket.id);
+        io.to(roomId).emit('playerDisconnected', socket.id);
+    });
+}
 
 // server side game loop
 let tickRate = 60; // target ticks per second
@@ -342,13 +439,26 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
     const room = roomsSystem.getRooms()[roomId];
     if (!room || !room.players[playerId]) return;
 
+    const stats = Object.values(room.players)
+        .map(p => ({
+            name: p.name,
+            kill: p.kill,
+            death: p.death,
+            kdratio: p.kdratio
+        }))
+        .sort((a, b) => {
+            if (b.kill !== a.kill) return b.kill - a.kill;
+            return a.name.localeCompare(b.name);
+        });
+
     // Notify player (so they can update UI and visuals)
     io.to(roomId).emit('playerDied', {
         playerId: playerId,
         position: { x: room.players[playerId].position.x, y: room.players[playerId].position.y, z: room.players[playerId].position.z },
         message: shooterId !== playerId ?
             `${room.players[shooterId].name} ${action} ${room.players[playerId].name}` :
-            `${room.players[playerId].name} ${action}`
+            `${room.players[playerId].name} ${action}`,
+        stats: stats
     });
 
     // Reset data after delay
@@ -382,7 +492,6 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
     }, timer);
 }
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
