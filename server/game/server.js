@@ -144,7 +144,7 @@ const PORT = parseInt(process.env.PORT, 10);
 let server = http.createServer();
 if (instancesSystem.isLobby()) {
     const app = express();
-    app.use(express.json()); // For JSON body parsing
+    app.use(express.json());
 
     // Add internal POST endpoints
     app.post('/internal/player-joined', (req, res) => {
@@ -168,7 +168,9 @@ if (instancesSystem.isLobby()) {
     server = http.createServer(app);
 }
 else {
-    server = http.createServer();
+    const app = express();
+    app.use(express.json());
+    server = http.createServer(app);
 }
 
 const io = new Server(server, {
