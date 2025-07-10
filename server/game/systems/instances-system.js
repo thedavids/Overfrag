@@ -112,9 +112,25 @@ export function createInstancesSystem(roomsSystem) {
             });
 
             if (!resumeRes.ok) {
-                console.warn(`[RESUME] Failed to resume Render service ${available}: ${resumeRes.statusText}`);
-                return null;
+                let message = resumeRes.statusText;
+                try {
+                    const data = await resumeRes.json();
+                    message = data.message || message;
+
+                    if (resumeRes.status === 400 /*&& message.toLowerCase().includes("already live")*/) {
+                        console.log(`[RESUME] Instance already live: ${available}: ${message}`);
+                    }
+                    else {
+                        console.warn(`[RESUME] Failed to resume Render service ${available}: ${message}`);
+                        return null;
+                    }
+                }
+                catch (err) {
+                    console.warn(`[RESUME] Failed to resume Render service ${available}: Unknown error`);
+                    return null;
+                }
             }
+            console.log(`[RESUME] Triggered resume for: ${available}`);
 
             // Wait for the service to actually respond over socket
             const ready = await waitForInstanceToBeReady(available);
