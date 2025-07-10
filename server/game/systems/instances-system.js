@@ -59,37 +59,60 @@ export function createInstancesSystem(roomsSystem) {
 
     async function spawnRemoteInstance() {
         const available = preallocatedRemoteUrls.find(url => !instanceRegistry[url]);
-
         if (!available) throw new Error("No available remote instance.");
 
         const serviceId = RENDER_SERVICE_IDS[available];
         if (!serviceId) throw new Error(`Missing Render service ID for ${available}`);
 
-        // Start the instance via Render API
         try {
-            const res = await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
+            // Trigger resume
+            const resumeRes = await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${RENDER_API_KEY}`,
                     'Content-Type': 'application/json'
                 }
             });
-            if (!res.ok) {
-                console.warn(`[RESUME] Failed to resume Render service ${available}: ${res.statusText}`);
+
+            if (!resumeRes.ok) {
+                console.warn(`[RESUME] Failed to resume Render service ${available}: ${resumeRes.statusText}`);
                 return null;
             }
-            else {
-                console.log(`Resumed remote instance: ${available}`);
+
+            console.log(`[RESUME] Triggered resume for: ${available}`);
+
+            // Wait for service to be live
+            const maxAttempts = 20;
+            const delay = 3000;
+
+            for (let i = 0; i < maxAttempts; i++) {
+                const statusRes = await fetch(`https://api.render.com/v1/services/${serviceId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${RENDER_API_KEY}`
+                    }
+                });
+
+                const data = await statusRes.json();
+                const status = data?.service?.status || data?.status;
+
+                console.log(`[RESUME] Polling status (${i + 1}/${maxAttempts}):`, status);
+
+                if (status === "live") {
+                    instanceRegistry[available] = { roomIds: new Set() };
+                    console.log(`[RESUME] Instance is live: ${available}`);
+                    return available;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
-        }
-        catch (err) {
-            console.warn(`[RESUME] Error resuming remote instance ${available}:`, err.message);
+
+            console.warn(`[RESUME] Timeout waiting for Render instance to be live: ${available}`);
+            return null;
+
+        } catch (err) {
+            console.warn(`[RESUME] Error during resume:`, err.message);
             return null;
         }
-
-        instanceRegistry[available] = { roomIds: new Set() };
-        console.log(`Triggered start for Render instance: ${available}`);
-        return available;
     }
 
     async function shutdownInstance(url) {
