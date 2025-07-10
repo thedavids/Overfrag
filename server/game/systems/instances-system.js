@@ -23,8 +23,8 @@ export function createInstancesSystem(roomsSystem) {
 
     const RENDER_API_KEY = process.env.RENDER_API_KEY;
     const RENDER_SERVICE_IDS = {
-        "https://multiplayerbackend-gameinstance-01.onrender.com": "srv-d1nd5n3uibrs73ffukn0?key=WYxruOCMUAo",
-        "https://multiplayerbackend-gameinstance-02.onrender.com": "srv-d1nd5n3uibrs73ffukmg?key=g0S64ZL2qrg"
+        "https://multiplayerbackend-gameinstance-01.onrender.com": "srv-d1nd5n3uibrs73ffukn0",
+        "https://multiplayerbackend-gameinstance-02.onrender.com": "srv-d1nd5n3uibrs73ffukmg"
     };
 
     function isLobby() {
@@ -68,7 +68,7 @@ export function createInstancesSystem(roomsSystem) {
         // Start the instance via Render API
         try {
             const res = await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
-                method: 'PATCH',
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${RENDER_API_KEY}`,
                     'Content-Type': 'application/json'
@@ -111,7 +111,7 @@ export function createInstancesSystem(roomsSystem) {
             if (serviceId) {
                 try {
                     const res = await fetch(`https://api.render.com/v1/services/${serviceId}/suspend`, {
-                        method: 'PATCH',
+                        method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${RENDER_API_KEY}`,
                             'Content-Type': 'application/json'
