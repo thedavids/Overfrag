@@ -121,6 +121,8 @@ export function createRoomsSystem({ mapUtils }) {
 
     function cleanupInactivePlayers(timeout = 30000, io) {
         const now = Date.now();
+        const THREE_MINUTES = 3 * 60 * 1000;
+
         for (const socketId in playerLastSeen) {
             if (now - playerLastSeen[socketId] > timeout) {
                 const sock = io.sockets.sockets.get(socketId);
@@ -130,13 +132,25 @@ export function createRoomsSystem({ mapUtils }) {
                 }
             }
         }
-        const emptyRooms = Object.entries(rooms)
-            .filter(([_, room]) => Object.keys(room.players).length === 0)
-            .map(([roomId]) => roomId);
 
-        for (const roomId of emptyRooms) {
-            delete rooms[roomId];
-            EventBus.emit("roomsSystem:roomDeleted", { roomId });
+        for (const [roomId, room] of Object.entries(rooms)) {
+            const playerCount = Object.keys(room.players).length;
+
+            if (playerCount === 0) {
+                if (!room.emptySince) {
+                    // Mark the timestamp when it first became empty
+                    room.emptySince = now;
+                }
+                else if (now - room.emptySince > THREE_MINUTES) {
+                    // Delete room if it's been empty too long
+                    delete rooms[roomId];
+                    EventBus.emit("roomsSystem:roomDeleted", { roomId });
+                }
+            }
+            else {
+                // Reset the timestamp if the room is no longer empty
+                delete room.emptySince;
+            }
         }
     }
 

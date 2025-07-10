@@ -152,7 +152,11 @@ const NetworkSystem = (() => {
 
         return new Promise((resolve, reject) => {
             gameSocket = io(roomUrl, {
-                query: { roomId, name: playerName, modelName, mapName }
+                query: { roomId, name: playerName, modelName, mapName },
+                timeout: 120000, // wait up to 120 seconds for connection
+                transports: ['websocket'],
+                reconnectionAttempts: 3,
+                reconnectionDelay: 5000
             });
 
             gameSocket.on("connect", () => {
