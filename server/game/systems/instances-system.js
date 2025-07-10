@@ -66,13 +66,26 @@ export function createInstancesSystem(roomsSystem) {
         if (!serviceId) throw new Error(`Missing Render service ID for ${available}`);
 
         // Start the instance via Render API
-        await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${RENDER_API_KEY}`,
-                'Content-Type': 'application/json'
+        try {
+            const res = await fetch(`https://api.render.com/v1/services/${serviceId}/resume`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${RENDER_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!res.ok) {
+                console.warn(`[RESUME] Failed to resume Render service ${available}: ${res.statusText}`);
+                return null;
             }
-        });
+            else {
+                console.log(`Resumed remote instance: ${available}`);
+            }
+        }
+        catch (err) {
+            console.warn(`[RESUME] Error resuming remote instance ${available}:`, err.message);
+            return null;
+        }
 
         instanceRegistry[available] = { roomIds: new Set() };
         console.log(`Triggered start for Render instance: ${available}`);
@@ -80,7 +93,7 @@ export function createInstancesSystem(roomsSystem) {
     }
 
     async function shutdownInstance(url) {
-        
+
         console.log(`shutdownInstance start for instance: ${url}`);
 
         const entry = instanceRegistry[url];
@@ -94,7 +107,7 @@ export function createInstancesSystem(roomsSystem) {
             const serviceId = RENDER_SERVICE_IDS[url];
 
             console.log(`shutdownInstance start for serviceId: ${serviceId}`);
-            
+
             if (serviceId) {
                 try {
                     const res = await fetch(`https://api.render.com/v1/services/${serviceId}/suspend`, {
@@ -146,7 +159,9 @@ export function createInstancesSystem(roomsSystem) {
         }
 
         const newInstanceUrl = await spawnNewInstance();
-        instanceRegistry[newInstanceUrl].roomIds.add(roomId);
+        if (newInstanceUrl != null) {
+            instanceRegistry[newInstanceUrl].roomIds.add(roomId);
+        }
         return newInstanceUrl;
     }
 
@@ -172,6 +187,7 @@ export function createInstancesSystem(roomsSystem) {
 
         try {
             console.log(`begin reportToLobby ${MAIN_INSTANCE_URL}/internal/${path}`, path);
+
             const res = await fetch(`${MAIN_INSTANCE_URL}/internal/${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -179,8 +195,7 @@ export function createInstancesSystem(roomsSystem) {
                 signal: controller.signal
             });
 
-            console.log('status', res.status); // <== Add this to see what's returned
-
+            console.log('status', res.status);
             console.log('end reportToLobby', path);
         } catch (err) {
             console.warn(`[REPORT] Failed to report to lobby: ${err.message}`);

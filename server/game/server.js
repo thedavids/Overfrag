@@ -208,6 +208,9 @@ function handleLobbySocket(socket) {
 
         const roomId = roomsSystem.generateRoomId();
         const roomUrl = await instancesSystem.allocateRoomInstance(roomId);
+        if (roomUrl == null) {
+            return callback({ error: 'Unable to start instance' });
+        }
         await roomsSystem.createRoomLobby({ roomId, name, modelName });
 
         callback({ roomId, roomUrl, health: 100 });
