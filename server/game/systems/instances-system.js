@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { spawn } from 'child_process';
+import { io } from "socket.io-client";
 
 export function createInstancesSystem(roomsSystem) {
     const IS_LOBBY = process.env.IS_LOBBY !== "false";
@@ -57,6 +58,42 @@ export function createInstancesSystem(roomsSystem) {
         return url;
     }
 
+    async function waitForInstanceToBeReady(url, maxAttempts = 30, delay = 3000) {
+        for (let i = 0; i < maxAttempts; i++) {
+            try {
+                console.log(`[WAIT] Attempting socket connection to ${url} (${i + 1}/${maxAttempts})...`);
+
+                await new Promise((resolve, reject) => {
+                    const socket = io(url, {
+                        transports: ['websocket'],
+                        timeout: delay,
+                        reconnection: false
+                    });
+
+                    socket.on("connect", () => {
+                        socket.disconnect();
+                        resolve();
+                    });
+
+                    socket.on("connect_error", (err) => {
+                        socket.disconnect();
+                        reject(err);
+                    });
+                });
+
+                console.log(`[WAIT] Successfully connected to ${url}`);
+                return true;
+            }
+            catch (err) {
+                console.warn(`[WAIT] Socket connection failed: ${err.message}`);
+                await new Promise(res => setTimeout(res, delay));
+            }
+        }
+
+        console.error(`[WAIT] Failed to connect to ${url} after ${maxAttempts} attempts.`);
+        return false;
+    }
+
     async function spawnRemoteInstance() {
         const available = preallocatedRemoteUrls.find(url => !instanceRegistry[url]);
         if (!available) throw new Error("No available remote instance.");
@@ -79,35 +116,12 @@ export function createInstancesSystem(roomsSystem) {
                 return null;
             }
 
-            console.log(`[RESUME] Triggered resume for: ${available}`);
+            // Wait for the service to actually respond over socket
+            const ready = await waitForInstanceToBeReady(available);
+            if (!ready) return null;
 
-            // Wait for service to be live
-            const maxAttempts = 20;
-            const delay = 3000;
-
-            for (let i = 0; i < maxAttempts; i++) {
-                const statusRes = await fetch(`https://api.render.com/v1/services/${serviceId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${RENDER_API_KEY}`
-                    }
-                });
-
-                const data = await statusRes.json();
-                const status = data?.service?.status || data?.status;
-
-                console.log(`[RESUME] Polling status (${i + 1}/${maxAttempts}):`, status);
-
-                if (status === "live") {
-                    instanceRegistry[available] = { roomIds: new Set() };
-                    console.log(`[RESUME] Instance is live: ${available}`);
-                    return available;
-                }
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-
-            console.warn(`[RESUME] Timeout waiting for Render instance to be live: ${available}`);
-            return null;
+            instanceRegistry[available] = { roomIds: new Set() };
+            return available;
 
         } catch (err) {
             console.warn(`[RESUME] Error during resume:`, err.message);
