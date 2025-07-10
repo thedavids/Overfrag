@@ -262,7 +262,7 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
             return;
         }
 
-        if (typeof mapName !== 'string') {
+        if (typeof mapName !== 'string' || mapName == 'null') {
             rejectGameSocketConnection(socket, "[GAME] Invalid room connection query (mapName is null)", roomId);
             return;
         }
@@ -272,8 +272,14 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
         console.log(`[GAME] Creating room ${roomId}`);
     }
 
+    const map = MapUtils.toClientMap(room.map);
+    if (map == null) {
+        rejectGameSocketConnection(socket, "[GAME] Invalid room connection query (map is null)", roomId);
+        return;
+    }
+
     socket.join(roomId);
-    socket.emit("loadMap", MapUtils.toClientMap(room.map));
+    socket.emit("loadMap", map);
 
     roomsSystem.addPlayer(roomId, socket.id, {
         name: safeName,
