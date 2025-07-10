@@ -165,7 +165,6 @@ const NetworkSystem = (() => {
 
             gameSocket.on("connect_error", (err) => {
                 console.error("Connection error:", err.message);
-                UISystem.showError("Unable to join game: " + err.message);
                 reject(err);
             });
         });
