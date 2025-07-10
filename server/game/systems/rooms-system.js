@@ -99,7 +99,7 @@ export function createRoomsSystem({ mapUtils }) {
 
                 delete room.players[socketId];
                 EventBus.emit("roomsSystem:playerDisconnected", { roomId, socketId, name });
-                
+
                 if (Object.keys(room.players).length === 0) {
                     delete rooms[roomId];
                     EventBus.emit("roomsSystem:roomDeleted", { roomId });
@@ -130,7 +130,16 @@ export function createRoomsSystem({ mapUtils }) {
                 }
             }
         }
+        const emptyRooms = Object.entries(rooms)
+            .filter(([_, room]) => Object.keys(room.players).length === 0)
+            .map(([roomId]) => roomId);
+
+        for (const roomId of emptyRooms) {
+            delete rooms[roomId];
+            EventBus.emit("roomsSystem:roomDeleted", { roomId });
+        }
     }
+
     return {
         getRooms,
         getRoomsByIdAndPlayersCount,
