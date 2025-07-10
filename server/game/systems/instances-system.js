@@ -58,7 +58,7 @@ export function createInstancesSystem(roomsSystem) {
         return url;
     }
 
-    async function waitForInstanceToBeReady(url, maxAttempts = 30, delay = 3000) {
+    async function waitForInstanceToBeReady(url, maxAttempts = 40, delay = 3000) {
         for (let i = 0; i < maxAttempts; i++) {
             try {
                 console.log(`[WAIT] Attempting socket connection to ${url} (${i + 1}/${maxAttempts})...`);

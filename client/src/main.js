@@ -153,7 +153,7 @@ const NetworkSystem = (() => {
         return new Promise((resolve, reject) => {
             gameSocket = io(roomUrl, {
                 query: { roomId, name: playerName, modelName, mapName },
-                timeout: 120000, // wait up to 120 seconds for connection
+                timeout: 130000, // wait up to 120 seconds for connection
                 transports: ['websocket'],
                 reconnectionAttempts: 3,
                 reconnectionDelay: 5000
@@ -167,9 +167,9 @@ const NetworkSystem = (() => {
                 resolve();
             });
 
-            gameSocket.on("connect_error", (err) => {
-                console.error("Connection error:", err.message);
-                reject(err);
+            gameSocket.once("reconnect_failed", () => {
+                console.error("All reconnection attempts failed.");
+                reject(new Error("Failed to connect after retries."));
             });
         });
     }
@@ -368,7 +368,7 @@ const GameSystem = (() => {
         UISystem.savePlayerName();
 
         const { roomId: id, roomUrl, health } = await new Promise((resolve) => {
-            NetworkSystem.emitToLobby("createRoom", { name: playerName, modelName, mapName }, resolve);
+            NetworkSystem.connectToGame("createRoom", { name: playerName, modelName, mapName }, resolve);
         });
 
         roomId = id;
