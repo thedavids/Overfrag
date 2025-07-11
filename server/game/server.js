@@ -95,7 +95,7 @@ EventBus.on("roomsSystem:playerConnected", ({ roomId, socketId, name }) => {
         instancesSystem.reportToLobby('player-joined', { roomId, playerId: socketId, isLobby: instancesSystem.isLobby() });
     }
     io.to(roomId).emit('serverMessage', { roomId, message: `${name} joined the game.` });
-    console.log(`Client ${name} connected to room ${roomId}: ${socketId}`);
+    console.log(`[GAME] Client ${name} connected to room ${roomId}: ${socketId}`);
 });
 
 EventBus.on("roomsSystem:playerDisconnected", ({ roomId, socketId, name }) => {
@@ -104,7 +104,7 @@ EventBus.on("roomsSystem:playerDisconnected", ({ roomId, socketId, name }) => {
     }
     io.to(roomId).emit('serverMessage', { message: `${name} left the game.` });
     io.to(roomId).emit('playerDisconnected', socketId);
-    console.log(`Client ${name} disconnected from room ${roomId}: ${socketId}`);
+    console.log(`[GAME] Client ${name} disconnected from room ${roomId}: ${socketId}`);
 });
 
 EventBus.on("roomsSystem:roomDeleted", ({ roomId }) => {
@@ -154,14 +154,14 @@ if (instancesSystem.isLobby()) {
                 modelName: ''
             });
         }
-        console.log(`[/internal/player-joined] Player joined: ${playerId} → ${roomId} @isLobby ${isLobby}`);
+        console.log(`[LOBBY / HTTP] Player joined: ${playerId} → ${roomId} @isLobby ${isLobby}`);
         res.sendStatus(200);
     });
 
     app.post('/internal/player-left', (req, res) => {
         const { roomId, playerId, isLobby } = req.body;
         roomsSystem.removePlayer(playerId);
-        console.log(`[/internal/player-left] Player left: ${playerId} → ${roomId} @isLobby ${isLobby}`);
+        console.log(`[LOBBY / HTTP] Player left: ${playerId} → ${roomId} @isLobby ${isLobby}`);
         res.sendStatus(200);
     });
     server = http.createServer(app);
@@ -373,8 +373,8 @@ let smoothing = 0.1; // exponential moving average
 let cleanupElapsed = 0;
 let statsElapsed = 0;
 
-const cleanupInterval = 60000; // 60s
-const statsInterval = 30000;   // 30s
+const cleanupInterval = 90000; // 90s
+const statsInterval = 60000;   // 60s
 
 let lastTimestamp = performance.now();
 let tickCount = 0;
