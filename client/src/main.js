@@ -238,10 +238,11 @@ const NetworkSystem = (() => {
     function handlePlayerMoved({ id, position, rotation, isIdle, isGrounded }) {
         const player = GameSystem.getPlayer(id);
         if (player) {
-            player.position.set(position.x, position.y, position.z);
-            if (rotation) player.rotation.y = rotation.y;
+            player.targetPosition.set(position.x, position.y, position.z);
+            if (rotation) player.targetRotationY = rotation.y;
+            player.targetIsIdle = isIdle;
+            player.targetIsGrounded = isGrounded;
         }
-        EventBus.emit("player:animated", { playerId: id, isGrounded, isIdle });
     }
 
     function handlePlayerDisconnected(id) {
@@ -380,7 +381,6 @@ const GameSystem = (() => {
         finally {
             UISystem.hideSpinner();
         }
-
     }
 
     async function joinRoom(idOverride = null) {
@@ -469,6 +469,9 @@ const GameSystem = (() => {
         const group = new THREE.Group();
         group.position.set(x, y, z);
         group.name = name;
+        group.targetPosition = new THREE.Vector3();
+        group.currentPosition = group.position.clone();
+        group.currentVelocity = new THREE.Vector3();
 
         const capsuleHeight = PLAYER_CAPSULE_HEIGHT;
         const capsuleRadius = PLAYER_CAPSULE_RADIUS;
@@ -606,6 +609,54 @@ const GameSystem = (() => {
         }
     }
 
+    function update(delta) {
+        const lerpFactor = 0.1; // adjust for smoother/slower transition
+        const localId = PlayerSystem.getLocalPlayerId();
+        for (const id in players) {
+            const player = players[id];
+            player?.userData.nameTag?.lookAt(CameraSystem.getCamera().position);
+            player?.userData.mixer?.update(delta);
+
+            if (id !== localId) {
+                const desired = player.targetPosition.clone().sub(player.position);
+                const distance = desired.length();
+
+                // Snap if close enough
+                let forceIsIdle = false;
+                let forceIsGrounded = false;
+                if (distance < 0.5) {
+                    player.position.copy(player.targetPosition);
+                    player.currentVelocity.set(0, 0, 0);
+                    forceIsIdle = player.targetIsIdle;
+                    forceIsGrounded = player.targetIsGrounded;
+                }
+                else {
+                    player.currentVelocity.lerp(desired, lerpFactor);
+                    player.position.add(player.currentVelocity.clone().multiplyScalar(delta * 10));
+                }
+
+                // Handle rotation
+                if (player.targetRotationY != null) {
+                    const angleDiff = player.targetRotationY - player.rotation.y;
+                    player.rotation.y += angleDiff * 0.1;
+                }
+
+                // Compute velocity & grounded state
+                const velocity = player.currentVelocity.length();
+                const verticalSpeed = Math.abs(player.currentVelocity.y);
+                const isGrounded = verticalSpeed < 0.5;
+                const isMoving = velocity > 0.01;
+
+                // Emit animation state
+                EventBus.emit("player:animated", {
+                    playerId: id,
+                    isGrounded: forceIsGrounded ?? isGrounded,
+                    isIdle: forceIsIdle ?? isGrounded ? !isMoving : false
+                });
+            }
+        }
+    }
+
     return {
         createRoom,
         joinRoom,
@@ -613,13 +664,7 @@ const GameSystem = (() => {
         getPlayer: id => players[id],
         isGameStarted: () => gameStarted,
         getRoomId: () => roomId,
-        update: delta => {
-            for (const id in players) {
-                const player = players[id];
-                player?.userData.nameTag?.lookAt(CameraSystem.getCamera().position);
-                player?.userData.mixer?.update(delta);
-            }
-        },
+        update,
         addPlayer,
         removePlayer: id => {
             if (players[id]) {
