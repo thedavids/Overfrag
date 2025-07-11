@@ -92,20 +92,19 @@ const roomsSystem = createRoomsSystem({ mapUtils: MapUtils });
 
 EventBus.on("roomsSystem:playerConnected", ({ roomId, socketId, name }) => {
     if (instancesSystem.isLobby() === false) {
-        console.log(`roomsSystem:playerConnected`);
         instancesSystem.reportToLobby('player-joined', { roomId, playerId: socketId, isLobby: instancesSystem.isLobby() });
     }
     io.to(roomId).emit('serverMessage', { roomId, message: `${name} joined the game.` });
+    console.log(`Client ${name} connected to room ${roomId}: ${socketId}`);
 });
 
 EventBus.on("roomsSystem:playerDisconnected", ({ roomId, socketId, name }) => {
     if (instancesSystem.isLobby() === false) {
-        console.log(`roomsSystem:playerDisconnected`);
         instancesSystem.reportToLobby('player-left', { roomId, playerId: socketId, isLobby: instancesSystem.isLobby() });
     }
     io.to(roomId).emit('serverMessage', { message: `${name} left the game.` });
     io.to(roomId).emit('playerDisconnected', socketId);
-    console.log(`Client disconnected: ${name} ${socketId}`);
+    console.log(`Client ${name} disconnected from room ${roomId}: ${socketId}`);
 });
 
 EventBus.on("roomsSystem:roomDeleted", ({ roomId }) => {
@@ -249,8 +248,6 @@ function rejectGameSocketConnection(socket, reason, roomId) {
 }
 
 async function handleGameSocket(socket, roomId, name, modelName, mapName) {
-    console.log(`[GAME] Client joined room ${roomId}: ${socket.id}`);
-
     if (!roomId || typeof name !== 'string' || typeof modelName !== 'string') {
         rejectGameSocketConnection(socket, "[GAME] Invalid room connection query", roomId);
         return;
@@ -258,6 +255,8 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
 
     const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
     const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
+
+    console.log(`[GAME] Client connected ${safeName}: ${socket.id}`);
 
     let room = roomsSystem.getRooms()[roomId];
 
@@ -274,7 +273,7 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
 
         await roomsSystem.createRoomGame({ roomId, name, modelName, mapName });
         room = roomsSystem.getRooms()[roomId];
-        console.log(`[GAME] Creating room ${roomId}`);
+        console.log(`[GAME] Room created: ${roomId}`);
     }
 
     const map = MapUtils.toClientMap(room.map);
