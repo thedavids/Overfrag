@@ -59,7 +59,8 @@ const UISystem = createUISystem({
     btnLeaveRoom: document.getElementById('btnLeaveRoom'),
     toggleViewBtn: document.getElementById('toggleView'),
     serverMessageContainer: document.getElementById('server-messages'),
-    mapSelector: document.getElementById('mapSelector')
+    mapSelector: document.getElementById('mapSelector'),
+    spinner: document.getElementById('spinner')
 });
 UISystem.init();
 
@@ -96,7 +97,7 @@ window.addEventListener('resize', () => {
     CameraSystem.getHudCamera().right = window.innerWidth;
     CameraSystem.getHudCamera().top = window.innerHeight;
     CameraSystem.getHudCamera().updateProjectionMatrix();
-    UISystem.updateCrosshairPosition();
+    UISystem.resize();
 });
 
 // === WeaponSystem ===
@@ -153,7 +154,7 @@ const NetworkSystem = (() => {
         return new Promise((resolve, reject) => {
             gameSocket = io(roomUrl, {
                 query: { roomId, name: playerName, modelName, mapName },
-                timeout: 130000, // wait up to 120 seconds for connection
+                timeout: 130000,
                 transports: ['websocket'],
                 reconnectionAttempts: 3,
                 reconnectionDelay: 5000
@@ -360,7 +361,7 @@ const GameSystem = (() => {
         const playerName = UISystem.getPlayerName();
         if (!UISystem.validatePlayerName()) {
             alert("Enter a name");
-            throw new Error("Missing player name");
+            return;
         }
 
         const mapName = UISystem.getSelectedMap();
@@ -368,18 +369,30 @@ const GameSystem = (() => {
         UISystem.savePlayerName();
 
         const { roomId: id, roomUrl, health } = await new Promise((resolve) => {
-            NetworkSystem.connectToGame("createRoom", { name: playerName, modelName, mapName }, resolve);
+            NetworkSystem.emitToLobby("createRoom", { name: playerName, modelName, mapName }, resolve);
         });
 
         roomId = id;
-        await connectToGame(roomUrl, playerName, modelName, health, mapName);
+        try {
+            UISystem.showSpinner();
+            await connectToGame(roomUrl, playerName, modelName, health, mapName);
+        }
+        finally {
+            UISystem.hideSpinner();
+        }
+
     }
 
     async function joinRoom(idOverride = null) {
         const playerName = UISystem.getPlayerName();
         if (!UISystem.validatePlayerName()) {
             alert("Enter a name");
-            throw new Error("Missing player name");
+            return;
+        }
+
+        if (idOverride == null && !UISystem.validateRoomId()) {
+            alert("Enter a room id");
+            return;
         }
 
         const joinId = idOverride || UISystem.getRoomId();
@@ -390,10 +403,25 @@ const GameSystem = (() => {
             NetworkSystem.emitToLobby("joinRoom", { roomId: joinId, name: playerName, modelName }, resolve);
         });
 
-        if (error) throw new Error(error);
+        if (error) {
+            if (error === 'Room not found') {
+                alert(error);
+                return;
+            }
+            else {
+                throw new Error(error);
+            }
+        }
 
         roomId = joinId;
-        await connectToGame(roomUrl, playerName, modelName, health, null);
+        try {
+            UISystem.showSpinner();
+            await connectToGame(roomUrl, playerName, modelName, health, null);
+        }
+
+        finally {
+            UISystem.hideSpinner();
+        }
     }
 
     async function connectToGame(roomUrl, playerName, modelName, health, mapName) {

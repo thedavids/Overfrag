@@ -70,7 +70,7 @@ export function createRocketSystem({ scene, cameraSystem, effectSystem }) {
         rockets.push({
             mesh: rocket,
             direction: direction.clone().normalize(),
-            speed: 30,
+            speed: 45,
             life: 5
         });
 

@@ -15,7 +15,8 @@ export function createUISystem({
     btnLeaveRoom,
     toggleViewBtn,
     serverMessageContainer,
-    mapSelector
+    mapSelector,
+    spinner
 }) {
     let hudSprite;
     let hudScene;
@@ -129,9 +130,20 @@ export function createUISystem({
         hudScene.add(crosshair);
     }
 
+    function resize() {
+        updateCrosshairPosition();
+        updateHealthPosition();
+    }
+
     function updateCrosshairPosition() {
         if (crosshair) {
             crosshair.position.set(window.innerWidth / 2, window.innerHeight / 2, 0);
+        }
+    }
+
+    function updateHealthPosition() {
+        if (hudSprite) {
+            hudSprite.position.set(window.innerWidth - 40, window.innerHeight - 50, 0);
         }
     }
 
@@ -208,14 +220,22 @@ export function createUISystem({
     }
 
     function validatePlayerName() {
-        const name = playerNameInput.value.trim();
+        return validateInput(playerNameInput);
+    }
+
+    function validateRoomId() {
+        return validateInput(roomIdInput);
+    }
+
+    function validateInput(input) {
+        const name = input.value.trim();
 
         if (!name) {
-            playerNameInput.classList.add("invalid-input");
+            input.classList.add("invalid-input");
             return false;
         }
 
-        playerNameInput.classList.remove("invalid-input");
+        input.classList.remove("invalid-input");
         return true;
     }
 
@@ -232,6 +252,14 @@ export function createUISystem({
         overlay.style.display = "none";
     }
 
+    function showSpinner() {
+        spinner.classList.remove('hidden');
+    }
+
+    function hideSpinner() {
+        spinner.classList.add('hidden');
+    }
+
     return {
         init,
         showGameUI,
@@ -244,8 +272,11 @@ export function createUISystem({
         getSelectedMap,
         renderRoomList,
         validatePlayerName,
+        validateRoomId,
         getHudScene: () => hudScene,
         getCrosshair: () => crosshair,
-        updateCrosshairPosition
+        resize,
+        showSpinner,
+        hideSpinner
     };
 }
