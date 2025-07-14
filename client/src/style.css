@@ -20,9 +20,44 @@
         left: 10px;
         z-index: 1;
         background: rgba(255, 255, 255, 0.95);
-        padding: 10px;
+        padding: 10px 10px 0;
         border-radius: 8px;
         width: 280px;
+    }
+
+    #menu input,
+    #menu select,
+    #menu button {
+        width: 100%;
+        display: flex;
+        max-width: 300px;
+        margin: 5px auto;
+        padding: 4px;
+        font-size: 16px;
+        box-sizing: border-box;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #menu button {
+        border-radius: 2px;
+        border: 1px solid gray;
+    }
+
+    #menu button:hover {
+        color: white;
+        background: #0056b3;
+        cursor: pointer;
+    }
+
+    #menu legend {
+        font-weight: bold;
+    }
+
+    .createRoom {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
     }
 
     .invalid-input {
@@ -159,18 +194,6 @@
         border-radius: 4px;
         cursor: help;
         font-size: 12px;
-    }
-
-    #menu input,
-    #menu select,
-    #menu button {
-        display: block;
-        width: 100%;
-        max-width: 300px;
-        margin: 5px auto;
-        padding: 8px;
-        font-size: 16px;
-        box-sizing: border-box;
     }
 
     #statsOverlay {

@@ -60,7 +60,9 @@ const UISystem = createUISystem({
     toggleViewBtn: document.getElementById('toggleView'),
     serverMessageContainer: document.getElementById('server-messages'),
     mapSelector: document.getElementById('mapSelector'),
-    spinner: document.getElementById('spinner')
+    spinner: document.getElementById('spinner'),
+    allowBotsInput: document.getElementById('allowBots'),
+    touchControlsContainerEl: document.getElementById('touch-controls-containers')
 });
 UISystem.init();
 
@@ -68,7 +70,7 @@ UISystem.init();
 const MapSystem = createMapSystem({ scene });
 
 // === EffectSystem ===
-const EffectSystem = createEffectSystem({ scene });
+const EffectSystem = createEffectSystem({ scene, document });
 
 // === SkySystem ===
 const SkySystem = createSkySystem({ scene });
@@ -145,7 +147,7 @@ const NetworkSystem = (() => {
         }
     }
 
-    async function connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName) {
+    async function connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName, allowBots) {
         if (gameSocket) {
             gameSocket.disconnect();
             gameSocket = null;
@@ -153,7 +155,7 @@ const NetworkSystem = (() => {
 
         return new Promise((resolve, reject) => {
             gameSocket = io(roomUrl, {
-                query: { roomId, name: playerName, modelName, mapName },
+                query: { roomId, name: playerName, modelName, mapName, allowBots },
                 timeout: 130000,
                 transports: ['websocket'],
                 reconnectionAttempts: 3,
@@ -182,6 +184,7 @@ const NetworkSystem = (() => {
         gameSocket.on("loadMap", async (map) => {
             await MapSystem.loadMap(map);
             EventBus.emit("map:loaded");
+            gameSocket.emit("mapLoaded");
         });
 
         gameSocket.on("laserFired", LaserSystem.handleFired);
@@ -235,13 +238,17 @@ const NetworkSystem = (() => {
         }
     }
 
-    function handlePlayerMoved({ id, position, rotation, isIdle, isGrounded }) {
+    function handlePlayerMoved({ id, position, rotation, isIdle, isGrounded, isBot }) {
         const player = GameSystem.getPlayer(id);
         if (player) {
             player.targetPosition.set(position.x, position.y, position.z);
             if (rotation) player.targetRotationY = rotation.y;
             player.targetIsIdle = isIdle;
             player.targetIsGrounded = isGrounded;
+
+            if (isBot) {
+                updateBotDetector(player);
+            }
         }
     }
 
@@ -341,6 +348,26 @@ const NetworkSystem = (() => {
         gameSocket.emit('grappleEnd', { roomId });
     });
 
+    const _arrowVec = new THREE.Vector3();
+
+    function updateBotDetector(player) {
+        const arrowLength = 50;
+        _arrowVec.set(0, arrowLength, 0);
+        if (player.userData.debugArrow == null) {
+            const arrowColor = 0x0000ff;
+            const arrowDirection = new THREE.Vector3(0, -1, 0); // pointing up
+            const arrowOrigin = player.position.clone().add(_arrowVec);
+
+            const arrowHelper = new THREE.ArrowHelper(arrowDirection, arrowOrigin, arrowLength, arrowColor);
+            arrowHelper.visible = false;
+            scene.add(arrowHelper);
+
+            player.userData.debugArrow = arrowHelper;
+        }
+        else {
+            player.userData.debugArrow.position.copy(player.position).add(_arrowVec);
+        }
+    }
 
     return {
         init,
@@ -358,7 +385,7 @@ const GameSystem = (() => {
     let roomId = null;
     const players = {};
 
-    async function createRoom() {
+    async function createRoom(allowBots) {
         const playerName = UISystem.getPlayerName();
         if (!UISystem.validatePlayerName()) {
             alert("Enter a name");
@@ -366,17 +393,21 @@ const GameSystem = (() => {
         }
 
         const mapName = UISystem.getSelectedMap();
+        if (!UISystem.validateMap()) {
+            alert("Select a map");
+            return;
+        }
         const modelName = `Astronaut${Math.floor(Math.random() * 3) + 1}.glb`;
         UISystem.savePlayerName();
 
         const { roomId: id, roomUrl, health } = await new Promise((resolve) => {
-            NetworkSystem.emitToLobby("createRoom", { name: playerName, modelName, mapName }, resolve);
+            NetworkSystem.emitToLobby("createRoom", { name: playerName, modelName, mapName, allowBots }, resolve);
         });
 
         roomId = id;
         try {
             UISystem.showSpinner();
-            await connectToGame(roomUrl, playerName, modelName, health, mapName);
+            await connectToGame(roomUrl, playerName, modelName, health, mapName, allowBots);
         }
         finally {
             UISystem.hideSpinner();
@@ -416,7 +447,7 @@ const GameSystem = (() => {
         roomId = joinId;
         try {
             UISystem.showSpinner();
-            await connectToGame(roomUrl, playerName, modelName, health, null);
+            await connectToGame(roomUrl, playerName, modelName, health, null, null);
         }
 
         finally {
@@ -424,10 +455,10 @@ const GameSystem = (() => {
         }
     }
 
-    async function connectToGame(roomUrl, playerName, modelName, health, mapName) {
+    async function connectToGame(roomUrl, playerName, modelName, health, mapName, allowBots) {
         return new Promise(async (resolve, reject) => {
             try {
-                await NetworkSystem.connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName);
+                await NetworkSystem.connectToGameSocket(roomUrl, roomId, playerName, modelName, health, mapName, allowBots);
             }
             catch (err) {
                 console.warn("Game socket failed to connect:", err.message);
@@ -551,9 +582,9 @@ const GameSystem = (() => {
         return sprite;
     }
 
-    EventBus.on("ui:createRoom", async ({ onComplete }) => {
+    EventBus.on("ui:createRoom", async ({ allowBots, onComplete }) => {
         try {
-            await createRoom();
+            await createRoom(allowBots);
         } catch (err) {
             console.error("Create room failed", err);
         } finally {

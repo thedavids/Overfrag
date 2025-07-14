@@ -37,6 +37,7 @@ export function createRoomsSystem({ mapUtils }) {
         const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
 
         rooms[roomId] = {
+            id: roomId,
             players: {},
             map: null,
             isLobby: true
@@ -47,7 +48,7 @@ export function createRoomsSystem({ mapUtils }) {
         return { roomId, safeName, safeModel };
     }
 
-    async function createRoomGame({ roomId, name, modelName, mapName }) {
+    async function createRoomGame({ roomId, name, modelName, mapName, allowBots }) {
         const safeName = name.trim().substring(0, 64).replace(/[^\w\s-]/g, '');
         const safeModel = modelName.trim().substring(0, 64).replace(/[^\w.-]/g, '');
 
@@ -67,9 +68,11 @@ export function createRoomsSystem({ mapUtils }) {
         }
 
         rooms[roomId] = {
+            id: roomId,
             players: {},
             map,
-            isLobby: false
+            isLobby: false,
+            allowBots: true
         };
 
         EventBus.emit("roomsSystem:roomCreated", { roomId });
@@ -100,7 +103,7 @@ export function createRoomsSystem({ mapUtils }) {
                 delete room.players[socketId];
                 EventBus.emit("roomsSystem:playerDisconnected", { roomId, socketId, name });
 
-                if (Object.keys(room.players).length === 0) {
+                if (Object.keys(room.players).length === 0 || Object.values(room.players).every(p => p.isBot)) {
                     delete rooms[roomId];
                     EventBus.emit("roomsSystem:roomDeleted", { roomId });
                 }

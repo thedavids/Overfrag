@@ -14,6 +14,7 @@ import { createRocketSystem } from './systems/rocket-system.js';
 import { createHealthPacksSystem } from './systems/healthpacks-system.js';
 import { createRoomsSystem } from './systems/rooms-system.js';
 import { createInstancesSystem } from './systems/instances-system.js';
+import { createBotsSystem } from './systems/bots-system.js';
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
@@ -87,8 +88,35 @@ EventBus.on("healthPacksSystem:healthPackRespawned", ({ roomId, id }) => {
     io.to(roomId).emit("healthPackRespawned", { id });
 });
 
+// bots system
+const botsSystem = createBotsSystem({ laserSystem, machinegunSystem });
+
+EventBus.on("botsSystem:moved", ({ botId, room, position, rotation, isIdle, isGrounded }) => {
+    if (!position || !room.players) return;
+    const player = room.players[botId];
+    if (!player) return;
+
+    player.position = position;
+    player.rotation = rotation;
+
+    io.to(room.id).emit('playerMoved', {
+        id: botId,
+        position,
+        rotation,
+        isIdle,
+        isGrounded,
+        isBot: true
+    });
+
+    healthPacksSystem.tryPickupHealthPack(room.id, room, botId);
+
+    if (position.y < -100 && player.health > 0 && !player.isDead) {
+        respawnPlayer(room.id, botId, botId, 'fell to his death', 100);
+    }
+});
+
 // roomsSystem
-const roomsSystem = createRoomsSystem({ mapUtils: MapUtils });
+const roomsSystem = createRoomsSystem({ mapUtils: MapUtils, botsSystem });
 
 EventBus.on("roomsSystem:playerConnected", ({ roomId, socketId, name }) => {
     if (instancesSystem.isLobby() === false) {
@@ -119,13 +147,13 @@ EventBus.on("serverMessage", ({ roomId, message }) => {
 EventBus.on("playerDied", ({ roomId, playerId, shooterId, message }) => {
 
     let room = roomsSystem.getRooms()[roomId];
-    if (playerId !== shooterId && room.players?.[shooterId] != null) {
+    if (playerId !== shooterId && room?.players?.[shooterId] != null) {
         room.players[shooterId].kill++;
         const death = room.players[shooterId].death;
         room.players[shooterId].kdratio = room.players[shooterId].kill / (death <= 0 ? 1 : death);
 
     }
-    if (room.players?.[playerId] != null) {
+    if (room?.players?.[playerId] != null) {
         room.players[playerId].death++;
         room.players[playerId].kdratio = room.players[playerId].kill / room.players[playerId].death;
     }
@@ -179,10 +207,10 @@ const io = new Server(server, {
 });
 
 io.on('connection', (socket) => {
-    const { roomId, name, modelName, mapName } = socket.handshake.query;
+    const { roomId, name, modelName, mapName, allowBots } = socket.handshake.query;
 
     if (roomId && name && modelName) {
-        handleGameSocket(socket, roomId, name, modelName, mapName);
+        handleGameSocket(socket, roomId, name, modelName, mapName, allowBots);
     }
     else {
         handleLobbySocket(socket);
@@ -247,7 +275,7 @@ function rejectGameSocketConnection(socket, reason, roomId) {
     socket.disconnect();
 }
 
-async function handleGameSocket(socket, roomId, name, modelName, mapName) {
+async function handleGameSocket(socket, roomId, name, modelName, mapName, allowBots) {
     if (!roomId || typeof name !== 'string' || typeof modelName !== 'string') {
         rejectGameSocketConnection(socket, "[GAME] Invalid room connection query", roomId);
         return;
@@ -282,15 +310,29 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
         return;
     }
 
-    socket.join(roomId);
     socket.emit("loadMap", map);
 
-    roomsSystem.addPlayer(roomId, socket.id, {
-        name: safeName,
-        modelName: safeModel
-    });
+    socket.once("mapLoaded", () => {
+        socket.join(roomId);
 
-    io.to(roomId).emit("playerList", room.players);
+        roomsSystem.addPlayer(roomId, socket.id, {
+            name: safeName,
+            modelName: safeModel
+        });
+
+        allowBots = typeof allowBots === 'string' ? allowBots.toLowerCase() === 'true' : allowBots
+        if (allowBots === true) {
+            const name1 = 'Mr. Dumb Red Bot';
+            const name2 = 'Mr. Dumb Green Bot';
+            botsSystem.spawnBot(1, name1, "Soldier1.glb", room);
+            botsSystem.spawnBot(2, name2, "Soldier2.glb", room);
+
+            io.to(roomId).emit('serverMessage', { roomId: room.id, message: `${name1} joined the game.` });
+            io.to(roomId).emit('serverMessage', { roomId: room.id, message: `${name2} joined the game.` });
+        }
+
+        io.to(roomId).emit("playerList", room.players);
+    });
 
     socket.on("heartbeat", () => {
         roomsSystem.setLastSeen(socket.id);
@@ -302,9 +344,20 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
         const player = room.players[socket.id];
         if (!player) return;
 
-
         player.position = position;
         player.rotation = rotation;
+
+        /*const lagMs = Math.floor(Math.random() * 900) + 100; // Random between 100 and 1000 ms
+
+        setTimeout(() => {
+            socket.to(roomId).emit('playerMoved', {
+                id: socket.id,
+                position,
+                rotation,
+                isIdle,
+                isGrounded
+            });
+        }, lagMs);*/
 
         socket.to(roomId).emit('playerMoved', {
             id: socket.id,
@@ -317,8 +370,6 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName) {
         healthPacksSystem.tryPickupHealthPack(roomId, room, socket.id);
 
         if (position.y < -100 && player.health > 0 && !player.isDead) {
-            player.health = 0;
-            player.isDead = true;
             respawnPlayer(roomId, socket.id, socket.id, 'fell to his death', 100);
         }
     });
@@ -390,8 +441,9 @@ function mainLoop() {
 
         // Main tick logic
         const tickStart = performance.now();
-        laserSystem.updateLasers(1000 / tickRate, roomsSystem.getRooms, m => m.bvhMesh);
-        rocketSystem.updateRockets(1000 / tickRate, roomsSystem.getRooms, m => m.bvhMesh);
+        laserSystem.updateLasers(delta, roomsSystem.getRooms, m => m.bvhMesh);
+        rocketSystem.updateRockets(delta, roomsSystem.getRooms, m => m.bvhMesh);
+        botsSystem.update(delta);
         const tickDuration = performance.now() - tickStart;
 
         avgTickTime = smoothing * tickDuration + (1 - smoothing) * avgTickTime;
@@ -449,6 +501,13 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
     const room = roomsSystem.getRooms()[roomId];
     if (!room || !room.players[playerId]) return;
 
+    if (room.players[playerId].isDead) {
+        return;
+    }
+
+    room.players[playerId].health = 0;
+    room.players[playerId].isDead = true;
+
     const stats = Object.values(room.players)
         .map(p => ({
             name: p.name,
@@ -489,6 +548,12 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
             playerId: playerId,
             position: spawnPosition,
             health: 100
+        });
+
+        EventBus.emit("player:respawned", {
+            playerId,
+            position: spawnPosition,
+            room
         });
 
         // Also notify other players about position reset

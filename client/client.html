@@ -59,20 +59,33 @@
   <div id="ui">
     <div id="menu">
       <input id="playerName" placeholder="Enter name" />
-      <select id="mapSelector">
-        <option>Loading maps...</option>
-      </select>
-      <button id="btnCreateRoom">Start Game</button>
-      <input id="roomId" placeholder="Room ID to join" />
-      <button id="btnJoinRoom">Join Game</button>
-      <div><strong>Active Rooms:</strong></div>
-      <div id="roomList">Connecting to server...</div>
-      <div id="server-status"></div>
+      <fieldset style="border-radius: 5px; border: 1px solid gray">
+        <legend>New Game</legend>
+        <div class="createRoom">
+          <select id="mapSelector">
+            <option>Loading maps...</option>
+          </select>
+          <div style="padding-left: 10px;display: flex; align-items: center; padding-left: 10px;">
+            <input type="checkbox" id="allowBots" name="allowBots" checked />
+            <label for="allowBots" style="white-space: nowrap; padding-left: 5px;">Bots ?</label>
+          </div>
+        </div>
+        <button id="btnCreateRoom">Create game & join room</button>
+      </fieldset>
+      <fieldset style="border-radius: 5px; border: 1px solid gray; margin-top: 5px">
+        <legend>Join Game</legend>
+        <input id="roomId" placeholder="Room ID to join" />
+        <button id="btnJoinRoom">Join Game</button>
+        <div><strong style="font-size: 14px">Active Rooms:</strong>&nbsp;<span style="font-size: 12px">(click room below
+            to join)</span></div>
+        <div id="roomList">Connecting to server...</div>
+        <div id="server-status"></div>
+      </fieldset>
     </div>
     <div id="game" style="display:none;">
       <div id="info"></div>
       <div style="display: flex; gap: 10px; margin-top: 5px">
-        <button id="btnLeaveRoom">Leave Game</button>
+        <button id="btnLeaveRoom">🔙 Leave Game</button>
         <button id="toggleView">👁 Toggle View</button>
         <div class="tooltip-container">
           <button class="tooltip-button">❔</button>
@@ -91,17 +104,20 @@
           </div>
         </div>
       </div>
-      <div id="server-messages" style="margin-top: 10px;"></div>
+      <div style="padding-top: 5px; vertical-align: middle;">(1..4 for weapons)</div>
     </div>
+    <div id="server-messages" style="margin-top: 10px;"></div>
   </div>
   <div id="canvas-container"></div>
-  <div id="touch-controls">
-    <div id="touch-wheel">
+  <div id="touch-controls-containers" style="display: none">
+    <div id="touch-controls">
+      <div id="touch-wheel">
+      </div>
+      <button id="btn-jump">🔼</button>
+      <button id="btn-fire" style="position: absolute; right: 20px; bottom: 110px;">🔫</button>
+      <button id="btn-grapple" style="position: absolute; right: 110px; bottom: 110px;">🪢</button>
+      <button id="btn-switch" style="position: absolute; right: 20px; bottom: 200px;">🔁</button>
     </div>
-    <button id="btn-jump">🔼</button>
-    <button id="btn-fire" style="position: absolute; right: 20px; bottom: 110px;">🔫</button>
-    <button id="btn-grapple" style="position: absolute; right: 110px; bottom: 110px;">🪢</button>
-    <button id="btn-switch" style="position: absolute; right: 20px; bottom: 200px;">🔁</button>
   </div>
   <div id="statsOverlay"></div>
   <div id="spinner" class="spinner-overlay hidden">

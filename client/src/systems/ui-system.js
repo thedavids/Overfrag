@@ -16,7 +16,9 @@ export function createUISystem({
     toggleViewBtn,
     serverMessageContainer,
     mapSelector,
-    spinner
+    spinner,
+    allowBotsInput,
+    touchControlsContainerEl
 }) {
     let hudSprite;
     let hudScene;
@@ -35,6 +37,7 @@ export function createUISystem({
         btnCreateRoom?.addEventListener("click", () => {
             btnCreateRoom.disabled = true;
             EventBus.emit("ui:createRoom", {
+                allowBots: allowBotsInput.checked,
                 onComplete: () => { btnCreateRoom.disabled = false; }
             });
         });
@@ -150,12 +153,14 @@ export function createUISystem({
     function showGameUI(message) {
         menuEl.style.display = 'none';
         gameEl.style.display = 'block';
+        touchControlsContainerEl.style.display = 'block';
         infoEl.innerText = message;
     }
 
     function showMainMenu() {
         menuEl.style.display = 'block';
         gameEl.style.display = 'none';
+        touchControlsContainerEl.style.display = 'none';
         infoEl.innerText = '';
         roomIdInput.value = '';
     }
@@ -175,6 +180,10 @@ export function createUISystem({
     function populateMapList(maps) {
         if (!mapSelector) return;
         mapSelector.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.innerText = 'Select a map...';
+        mapSelector.appendChild(option);
         maps.forEach(({ id, name }) => {
             const option = document.createElement('option');
             option.value = id;
@@ -227,8 +236,12 @@ export function createUISystem({
         return validateInput(roomIdInput);
     }
 
+    function validateMap() {
+        return validateInput(mapSelector);
+    }
+
     function validateInput(input) {
-        const name = input.value.trim();
+        const name = input.value?.trim() ?? '';
 
         if (!name) {
             input.classList.add("invalid-input");
@@ -272,6 +285,7 @@ export function createUISystem({
         getSelectedMap,
         renderRoomList,
         validatePlayerName,
+        validateMap,
         validateRoomId,
         getHudScene: () => hudScene,
         getCrosshair: () => crosshair,
