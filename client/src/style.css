@@ -57,7 +57,27 @@
     .createRoom {
         display: flex;
         flex-direction: row;
+        align-items: center;
         width: 100%;
+    }
+
+    #createRoom select {
+        flex: 1;
+        max-width: 300px;
+    }
+
+    .flex-label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-left: 5px;
+    }
+
+    .flex-label input {
+        width: auto !important;
+        flex-shrink: 0;
     }
 
     .invalid-input {
