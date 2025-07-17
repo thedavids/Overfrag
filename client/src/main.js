@@ -16,6 +16,7 @@ import { createEffectSystem } from './systems/effect-system.js';
 import { createCameraSystem } from './systems/camera-system.js';
 import { createSkySystem } from './systems/sky-system.js';
 import { createInputSystem } from './systems/input-system.js';
+import { createAudioSystem } from './systems/audio-system.js';
 import { createGrappleSystem } from './systems/grapple-system.js';
 import { createPlayerSystem } from './systems/player-system.js';
 import { createUISystem } from './systems/ui-system.js';
@@ -115,7 +116,11 @@ const WeaponSystem = createWeaponSystem({ laser: LaserSystem, machinegun: Machin
 const GrappleSystem = createGrappleSystem({ scene, cameraSystem: CameraSystem, inputSystem: InputSystem });
 
 // === PlayerSystem ===
-const PlayerSystem = createPlayerSystem({ inputSystem: InputSystem, grappleSystem: GrappleSystem, PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT })
+const PlayerSystem = createPlayerSystem({ inputSystem: InputSystem, grappleSystem: GrappleSystem, PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT });
+
+// === AudioSystem ===
+const AudioSystem = createAudioSystem({ scene, cameraSystem: CameraSystem });
+AudioSystem.init();
 
 // === NetworkSystem Begin ===
 const NetworkSystem = (() => {
@@ -208,6 +213,12 @@ const NetworkSystem = (() => {
             GrappleSystem.remoteGrappleStart({ playerId, origin, direction, playerObj });
         });
         gameSocket.on("remoteGrappleEnd", GrappleSystem.remoteGrappleEnd);
+        gameSocket.on("remoteGrappleAttached", ({ playerId, origin }) => {
+            const roomId = GameSystem.getRoomId();
+            EventBus.emit("grappleAttached", { roomId, origin });
+        });
+
+        gameSocket.on("remoteGrappleAttached", GrappleSystem.remoteGrappleAttached);
         gameSocket.on("respawn", handleRespawn);
         gameSocket.on("playerDied", handlePlayerDied);
         gameSocket.on("serverMessage", handleServerMessage);
@@ -354,6 +365,11 @@ const NetworkSystem = (() => {
             origin: origin,
             direction: direction
         });
+    });
+
+    EventBus.on("player:grappleAttached", ({ roomId, origin }) => {
+        gameSocket.emit('grappleAttached', { roomId, origin });
+        EventBus.emit("grappleAttached", { origin });
     });
 
     EventBus.on("player:grappleEnded", ({ roomId }) => {
@@ -743,6 +759,8 @@ const animate = () => {
     LaserSystem.update(delta);
 
     RocketSystem.update(delta);
+
+    AudioSystem.update(delta);
 
     MapSystem.update(delta);
 

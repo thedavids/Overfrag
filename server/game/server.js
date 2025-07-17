@@ -423,6 +423,13 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName, allowB
         });
     });
 
+    socket.on('grappleAttached', ({ origin }) => {
+        socket.to(roomId).emit('remoteGrappleAttached', {
+            playerId: socket.id,
+            origin: origin
+        });
+    });
+
     socket.on('grappleEnd', () => {
         socket.to(roomId).emit('remoteGrappleEnd', {
             playerId: socket.id
@@ -561,7 +568,7 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
 
         const spawnPosition = { x: 0, y: 0, z: 0 }; // change as needed
         room.players[playerId].position = spawnPosition;
-        room.players[playerId].health = 100;
+        room.players[playerId].health = PLAYER_HEALTH;
         room.players[playerId].isDead = false;
 
         // Notify player (so they can update UI and visuals)

@@ -64,6 +64,12 @@ export function createMachineGunSystem({ cameraSystem, effectSystem }) {
         if (showImpact && targetPoint) {
             effectSystem.spawnHitEffect(targetPoint, direction.clone().negate());
         }
+
+        EventBus.emit("machinegunFired", {
+            roomId: gameState.roomId,
+            origin: origin,
+            direction: direction
+        });
     }
 
     return {

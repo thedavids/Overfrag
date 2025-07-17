@@ -158,6 +158,11 @@ export function createGrappleSystem({ scene, cameraSystem, inputSystem }) {
             if (hits.length > 0) {
                 state.point = hits[0].point.clone();
                 state.attached = true;
+
+                EventBus.emit("player:grappleAttached", {
+                    roomId: gameState.roomId,
+                    origin: state.point
+                });
             }
         }
 

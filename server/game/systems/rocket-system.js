@@ -21,8 +21,8 @@ export function createRocketSystem() {
             position,
             life: 10000,
             speed: 45,
-            radius: 5,
-            damage: 50,
+            radius: 7,
+            damage: 75,
             lastUpdate: Date.now(),
             justSpawned: true
         });

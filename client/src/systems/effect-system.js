@@ -229,7 +229,7 @@ export function createEffectSystem({ scene, document }) {
         mesh.position.copy(position);
         mesh.scale.set(0.01, 0.01, 0.01);
         scene.add(mesh);
-        activeRocketExplosions.push({ mesh, geometry, material: mesh.material, elapsed: 0, duration: 0.5 });
+        activeRocketExplosions.push({ mesh, geometry, material: mesh.material, elapsed: 0, duration: 0.7 });
     }
 
     const beamGeometryCache = new Map();

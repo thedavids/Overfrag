@@ -3,7 +3,7 @@ import { EventBus } from 'shared';
 import { GameState } from 'shared';
 
 export function createShotgunSystem({ cameraSystem, effectSystem }) {
-    const COOLDOWN = 800; // ms
+    const COOLDOWN = 1200; // ms
     const PELLET_COUNT = 8;
     const SPREAD_ANGLE = 10; // degrees
     let lastFired = 0;
@@ -67,6 +67,12 @@ export function createShotgunSystem({ cameraSystem, effectSystem }) {
         }
 
         effectSystem.spawnTracer(origin, direction);
+
+        EventBus.emit("shotgunFired", {
+            roomId: gameState.roomId,
+            origin: origin,
+            direction: direction
+        });
     }
 
     function handleBlocked({ shooterId, origin, direction }) {

@@ -65,6 +65,12 @@ export function createRailGunSystem({ cameraSystem, effectSystem }) {
         }
 
         effectSystem.spawnRailSlug(origin, direction, targetPoint);
+        
+        EventBus.emit("railgunFired", {
+            roomId: gameState.roomId,
+            origin: origin,
+            direction: direction
+        });
     }
 
     return {

@@ -74,11 +74,22 @@ export function createRocketSystem({ scene, cameraSystem, effectSystem }) {
             life: 5
         });
 
+        EventBus.emit("rocketLaunched", {
+            roomId: gameState.roomId,
+            origin: origin,
+            direction: direction
+        });
+
         return rocket;
     }
 
     function createExplosion(position) {
         effectSystem.createRocketExplosion(position);
+
+        EventBus.emit("rocketExploded", {
+            roomId: gameState.roomId,
+            position: position
+        });
     }
 
     function update(delta) {

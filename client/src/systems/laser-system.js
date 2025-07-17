@@ -76,6 +76,12 @@ export function createLaserSystem({ scene, cameraSystem }) {
             life: 2
         });
 
+        EventBus.emit("laserFired", {
+            roomId: gameState.roomId,
+            origin: origin,
+            direction: direction
+        });
+
         return laser;
     }
 
