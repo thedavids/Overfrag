@@ -11,6 +11,7 @@ import { createLaserSystem } from './systems/laser-system.js';
 import { createMachineGunSystem } from './systems/machinegun-system.js';
 import { createShotgunSystem } from './systems/shotgun-system.js';
 import { createRocketSystem } from './systems/rocket-system.js';
+import { createRailGunSystem } from './systems/railgun-system.js';
 import { createHealthPacksSystem } from './systems/healthpacks-system.js';
 import { createRoomsSystem } from './systems/rooms-system.js';
 import { createInstancesSystem } from './systems/instances-system.js';
@@ -24,6 +25,8 @@ process.on("uncaughtException", err => {
 process.on("unhandledRejection", (reason, promise) => {
     console.error("UNHANDLED PROMISE:", reason);
 });
+
+const PLAYER_HEALTH = 200;
 
 // laserSystem
 const laserSystem = createLaserSystem();
@@ -77,6 +80,17 @@ EventBus.on("rocketSystem:rocketExploded", ({ roomId, id, position }) => {
     io.to(roomId).emit("rocketExploded", { id, position });
 });
 
+// railgunSystem
+const railgunSystem = createRailGunSystem();
+
+EventBus.on("railgunSystem:railgunBlocked", ({ roomId, shooterId, origin, direction }) => {
+    io.to(roomId).emit('railgunBlocked', { shooterId, origin, direction });
+});
+
+EventBus.on("railgunSystem:railgunHit", ({ roomId, shooterId, targetId, position, origin, direction, health, damage }) => {
+    io.to(roomId).emit("railgunHit", { shooterId, targetId, position, origin, direction, health, damage });
+});
+
 // healthPacksSystem
 const healthPacksSystem = createHealthPacksSystem();
 
@@ -89,7 +103,7 @@ EventBus.on("healthPacksSystem:healthPackRespawned", ({ roomId, id }) => {
 });
 
 // bots system
-const botsSystem = createBotsSystem({ laserSystem, machinegunSystem });
+const botsSystem = createBotsSystem({ laserSystem, machinegunSystem, health: PLAYER_HEALTH });
 
 EventBus.on("botsSystem:moved", ({ botId, room, position, rotation, isIdle, isGrounded }) => {
     if (!position || !room.players) return;
@@ -179,7 +193,8 @@ if (instancesSystem.isLobby()) {
         if (isLobby === false) {
             roomsSystem.addPlayer(roomId, playerId, {
                 name: '',
-                modelName: ''
+                modelName: '',
+                health: PLAYER_HEALTH
             });
         }
         console.log(`[LOBBY / HTTP] Player joined: ${playerId} → ${roomId} @isLobby ${isLobby}`);
@@ -242,7 +257,7 @@ function handleLobbySocket(socket) {
         }
         await roomsSystem.createRoomLobby({ roomId, name, modelName });
 
-        callback({ roomId, roomUrl, health: 100 });
+        callback({ roomId, roomUrl, health: PLAYER_HEALTH });
     });
 
     socket.on('joinRoom', ({ roomId, name, modelName }, callback) => {
@@ -259,7 +274,7 @@ function handleLobbySocket(socket) {
             return callback({ error: 'Room instance not available' });
         }
 
-        callback({ roomUrl, success: true, health: 100 });
+        callback({ roomUrl, success: true, health: PLAYER_HEALTH });
     });
 }
 
@@ -317,7 +332,8 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName, allowB
 
         roomsSystem.addPlayer(roomId, socket.id, {
             name: safeName,
-            modelName: safeModel
+            modelName: safeModel,
+            health: PLAYER_HEALTH
         });
 
         allowBots = typeof allowBots === 'string' ? allowBots.toLowerCase() === 'true' : allowBots
@@ -392,6 +408,11 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName, allowB
     socket.on('launchRocket', ({ origin, direction, id }) => {
         if (!origin || !direction || typeof id !== 'string') return;
         rocketSystem.launchRocket(roomId, id, socket.id, origin, direction, { ...origin });
+    });
+
+    socket.on('railgunFire', ({ origin, direction }) => {
+        if (!origin || !direction) return;
+        railgunSystem.fire({ roomId, room, shooterId: socket.id, origin, direction }, map => map.bvhMesh);
     });
 
     socket.on('grappleStart', ({ origin, direction }) => {
@@ -547,7 +568,7 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
         io.to(roomId).emit('respawn', {
             playerId: playerId,
             position: spawnPosition,
-            health: 100
+            health: PLAYER_HEALTH
         });
 
         EventBus.emit("player:respawned", {

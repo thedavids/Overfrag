@@ -80,12 +80,16 @@ export function createRoomsSystem({ mapUtils }) {
         return { roomId, safeName, safeModel, map };
     }
 
-    function addPlayer(roomId, socketId, { name, modelName }) {
+    function addPlayer(roomId, socketId, { name, modelName, health }) {
+        if (rooms[roomId] == null) {
+            return;
+        }
+        
         rooms[roomId].players[socketId] = {
             name,
             modelName,
             position: { x: 0, y: 0, z: 0 },
-            health: 100,
+            health: health,
             kill: 0,
             death: 0,
             kdratio: 0

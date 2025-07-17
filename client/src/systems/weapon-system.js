@@ -1,11 +1,12 @@
 import { EventBus } from 'shared';
 
-export function createWeaponSystem({ laser, machinegun, shotgun, rocket }) {
+export function createWeaponSystem({ laser, machinegun, shotgun, rocket, railgun }) {
     const weapons = {
         laser,
         machinegun,
         shotgun,
-        rocket
+        rocket,
+        railgun
     };
 
     let fireHeld = false;
@@ -23,11 +24,17 @@ export function createWeaponSystem({ laser, machinegun, shotgun, rocket }) {
     EventBus.on("input:switchWeapon", ({ weaponId }) => {
         if (weaponId === 2) {
             switchWeapon('shotgun');
-        } else if (weaponId === 3) {
+        }
+        else if (weaponId === 3) {
             switchWeapon('machinegun');
-        } else if (weaponId === 4) {
+        }
+        else if (weaponId === 4) {
             switchWeapon('rocket');
-        } else {
+        }
+        else if (weaponId === 5) {
+            switchWeapon('railgun');
+        } 
+        else {
             switchWeapon('laser');
         }
     });
@@ -39,6 +46,8 @@ export function createWeaponSystem({ laser, machinegun, shotgun, rocket }) {
             switchWeapon('machinegun');
         } else if (currentWeapon === 'machinegun') {
             switchWeapon('rocket');
+        } else if (currentWeapon === 'rocket') {
+            switchWeapon('railgun');
         } else {
             switchWeapon('laser');
         }

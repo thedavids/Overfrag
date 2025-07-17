@@ -10,6 +10,7 @@ import { createLaserSystem } from './systems/laser-system.js';
 import { createMachineGunSystem } from './systems/machinegun-system.js';
 import { createShotgunSystem } from './systems/shotgun-system.js';
 import { createRocketSystem } from './systems/rocket-system.js';
+import { createRailGunSystem } from './systems/railgun-system.js';
 import { createWeaponSystem } from './systems/weapon-system.js';
 import { createEffectSystem } from './systems/effect-system.js';
 import { createCameraSystem } from './systems/camera-system.js';
@@ -107,7 +108,8 @@ const LaserSystem = createLaserSystem({ scene, cameraSystem: CameraSystem });
 const MachineGunSystem = createMachineGunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem });
 const ShotgunSystem = createShotgunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem });
 const RocketSystem = createRocketSystem({ scene, cameraSystem: CameraSystem, effectSystem: EffectSystem });
-const WeaponSystem = createWeaponSystem({ laser: LaserSystem, machinegun: MachineGunSystem, shotgun: ShotgunSystem, rocket: RocketSystem });
+const RailGunSystem = createRailGunSystem({ cameraSystem: CameraSystem, effectSystem: EffectSystem });
+const WeaponSystem = createWeaponSystem({ laser: LaserSystem, machinegun: MachineGunSystem, shotgun: ShotgunSystem, rocket: RocketSystem, railgun: RailGunSystem });
 
 // === GrappleSystem ===
 const GrappleSystem = createGrappleSystem({ scene, cameraSystem: CameraSystem, inputSystem: InputSystem });
@@ -197,6 +199,8 @@ const NetworkSystem = (() => {
         gameSocket.on("rocketHit", RocketSystem.handleHit);
         gameSocket.on("rocketLaunched", RocketSystem.handleLaunched);
         gameSocket.on("rocketExploded", RocketSystem.handleExploded);
+        gameSocket.on("railgunBlocked", RailGunSystem.handleBlocked);
+        gameSocket.on("railgunHit", RailGunSystem.handleHit);
         gameSocket.on("healthPackTaken", MapSystem.healthPackTaken);
         gameSocket.on("healthPackRespawned", MapSystem.healthPackRespawned);
         gameSocket.on("remoteGrappleStart", ({ playerId, origin, direction }) => {
@@ -333,6 +337,14 @@ const NetworkSystem = (() => {
             origin: origin,
             direction: direction,
             id: rocketId
+        });
+    });
+
+    EventBus.on("player:railgunFire", ({ roomId, origin, direction }) => {
+        gameSocket.emit('railgunFire', {
+            roomId: roomId,
+            origin: origin,
+            direction: direction
         });
     });
 

@@ -1,7 +1,7 @@
 import { EventBus } from '../shared/event-bus.js';
 import * as THREE from 'three';
 
-export function createBotsSystem({ laserSystem, machinegunSystem }) {
+export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
     const bots = {};
     const tempMesh = new THREE.Mesh();
     const botRadius = 0.3;
@@ -37,7 +37,7 @@ export function createBotsSystem({ laserSystem, machinegunSystem }) {
             name,
             position,
             modelName,
-            health: 100,
+            health: health,
             kill: 0,
             death: 0,
             kdratio: 0,

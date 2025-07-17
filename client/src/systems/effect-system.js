@@ -86,6 +86,7 @@ export function createEffectSystem({ scene, document }) {
     const muzzleFlashes = [];
     const activeTracers = [];
     const activeRocketExplosions = [];
+    const activeRailSlugs = [];
 
     const sharedBloodGeometry = new THREE.SphereGeometry(0.05, 4, 4);
     const sharedBloodMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
@@ -231,6 +232,70 @@ export function createEffectSystem({ scene, document }) {
         activeRocketExplosions.push({ mesh, geometry, material: mesh.material, elapsed: 0, duration: 0.5 });
     }
 
+    const beamGeometryCache = new Map();
+    const spiralMaterial = new THREE.MeshBasicMaterial({
+        color: 0x66ccff,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00aaff,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+    });
+
+    function getBeamGeometry(length) {
+        if (!beamGeometryCache.has(length)) {
+            beamGeometryCache.set(length, new THREE.CylinderGeometry(0.05, 0.05, length, 8, 1, true));
+        }
+        return beamGeometryCache.get(length);
+    }
+
+    function spawnRailSlug(origin, direction, targetPoint = null) {
+        const defaultBeamLength = 5000;
+        const spiralRadius = 0.15;
+
+        // === Beam length
+        const beamLength = targetPoint ? origin.distanceTo(targetPoint) : defaultBeamLength;
+
+        // === Beam ===
+        const beamMesh = new THREE.Mesh(getBeamGeometry(beamLength), beamMaterial);
+        const dir = direction.clone().normalize();
+        beamMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        beamMesh.position.copy(origin).add(dir.clone().multiplyScalar(beamLength / 2));
+        scene.add(beamMesh);
+
+        // === Spiral ===
+        const totalPoints = Math.min(300, Math.floor(beamLength * 2));
+        const loops = Math.max(1, Math.floor(beamLength / 2));
+
+        const spiralPoints = [];
+        for (let i = 0; i <= totalPoints; i++) {
+            const t = i / totalPoints;
+            const angle = t * Math.PI * 2 * loops;
+            spiralPoints.push(new THREE.Vector3(
+                Math.cos(angle) * spiralRadius,
+                t * beamLength,
+                Math.sin(angle) * spiralRadius
+            ));
+        }
+
+        const spiralCurve = new THREE.CatmullRomCurve3(spiralPoints);
+        const spiralGeometry = new THREE.TubeGeometry(spiralCurve, totalPoints, 0.01, 6, false);
+        const spiralMesh = new THREE.Mesh(spiralGeometry, spiralMaterial);
+        spiralMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        spiralMesh.position.copy(origin);
+        scene.add(spiralMesh);
+
+        // === Lifetime tracking
+        activeRailSlugs.push({ beamMesh, spiralMesh, life: 0.6 });
+    }
+
     function update(delta) {
         damageNumbers.forEach((dn, i) => {
             dn.elapsed += delta;
@@ -306,6 +371,15 @@ export function createEffectSystem({ scene, document }) {
                 activeRocketExplosions.splice(i, 1);
             }
         });
+
+        activeRailSlugs.forEach((s, i) => {
+            s.life -= delta;
+            if (s.life <= 0) {
+                scene.remove(s.beamMesh);
+                scene.remove(s.spiralMesh);
+                activeRailSlugs.splice(i, 1);
+            }
+        });
     }
 
     EventBus.on("player:tookDamage", ({ position, health, damage }) => {
@@ -323,6 +397,7 @@ export function createEffectSystem({ scene, document }) {
         spawnTracer,
         spawnHitEffect,
         createRocketExplosion,
+        spawnRailSlug,
         update
     };
 }
