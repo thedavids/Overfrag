@@ -115,7 +115,7 @@ export function createRocketSystem() {
                                         roomId,
                                         playerId: pid,
                                         shooterId: rocket.shooterId,
-                                        message: "was rocketed"
+                                        message: "rocketed"
                                     });
                                 }
                             }

@@ -1,7 +1,7 @@
 import { EventBus } from '../shared/event-bus.js';
 import * as THREE from 'three';
 
-export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
+export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem, rocketSystem, health }) {
     const bots = {};
     const tempMesh = new THREE.Mesh();
     const botRadius = 0.3;
@@ -9,10 +9,34 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
     let localProjectileCounter = 0;
     const sharedRaycaster = new THREE.Raycaster();
 
-    function spawnBot(id, name = "Bot", modelName = "Soldier1.glb", room) {
-        const x = -50 + Math.random() * 150;
-        const z = -50 + Math.random() * 150;
-        const y = getYforXZ(room.map?.bvhMesh, x, z);
+    const nameOptions = [
+        ["Chris Terreri", "laser"],
+        ["Glenn Healy", "shotgun"],
+        ["Andy Moog", "machinegun"],
+        ["Mike Vernon", "rocket"],
+        ["Tom Barasso", "laser"],
+        ["Curtis Joseph", "shotgun"],
+        ["Kelly Hrudey", "machinegun"],
+        ["Darren Puppa", "rocket"],
+        ["Don Beaupre", "laser"],
+        ["Mike Richter", "shotgun"],
+        ["John Vanbiesbrouck", "machinegun"]
+    ];
+
+    const modelOptions = ["Soldier1.glb", "Soldier2.glb"];
+
+    function spawnBot(id, room, name = null, modelName = null) {
+
+        const botItem = nameOptions[Math.floor(Math.random() * nameOptions.length)];
+        name = name || botItem[0];
+        modelName = modelName || modelOptions[Math.floor(Math.random() * modelOptions.length)];
+        const weapon = botItem[1];
+
+        const bounds = getXZBoundsFromBVH(room.map?.bvhMesh);
+
+        const x = bounds.minX + Math.random() * (bounds.maxX - bounds.minX);
+        const z = bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ);
+        let y = getYforXZ(room.map?.bvhMesh, x, z);
         const position = new THREE.Vector3(x, y, z);
 
         bots[id] = {
@@ -30,7 +54,8 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
             stuckTimer: 0,
             jumping: false,
             jumpCooldown: 0,
-            laserShootCooldown: 0
+            shotCooldown: 0,
+            weapon: weapon
         };
 
         room.players[id] = {
@@ -43,11 +68,15 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
             kdratio: 0,
             isBot: true
         };
+
+        return bots[id];
     }
 
     EventBus.on("player:respawned", ({ playerId, position, room }) => {
-        const x = -100 + Math.random() * 200;
-        const z = -100 + Math.random() * 200;
+        const bounds = getXZBoundsFromBVH(room.map?.bvhMesh);
+
+        const x = bounds.minX + Math.random() * (bounds.maxX - bounds.minX);
+        const z = bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ);
         let y = getYforXZ(room.map?.bvhMesh, x, z);
 
         if (bots[playerId] != null) {
@@ -57,6 +86,29 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
             room.players[playerId].position = new THREE.Vector3(x, y, z);
         }
     });
+
+    function getXZBoundsFromBVH(bvhMesh, marginPercent = 0.2) {
+        tempMesh.geometry = bvhMesh;
+
+        if (!tempMesh.geometry.boundingBox) {
+            tempMesh.geometry.computeBoundingBox();
+        }
+
+        const bbox = tempMesh.geometry.boundingBox;
+
+        const xSize = bbox.max.x - bbox.min.x;
+        const zSize = bbox.max.z - bbox.min.z;
+
+        const xMargin = xSize * marginPercent;
+        const zMargin = zSize * marginPercent;
+
+        return {
+            minX: bbox.min.x + xMargin,
+            maxX: bbox.max.x - xMargin,
+            minZ: bbox.min.z + zMargin,
+            maxZ: bbox.max.z - zMargin
+        };
+    }
 
     function getYforXZ(bvhMesh, x, z) {
         let y = 200; // fallback spawn height
@@ -324,13 +376,12 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
         const bot = bots[botId];
         if (!bot) return;
 
-        if (bot.laserShootCooldown > 0) {
-            bot.laserShootCooldown -= delta;
+        if (bot.shotCooldown > 0) {
+            bot.shotCooldown -= delta;
             return;
         }
 
-        // Set cooldown to 300ms to 800ms
-        bot.laserShootCooldown = 0.3 + Math.random() * 0.5;
+
 
         // 9/10 chance to miss
         const willMiss = Math.random() < 0.9;
@@ -344,15 +395,31 @@ export function createBotsSystem({ laserSystem, machinegunSystem, health }) {
             _shootDir.applyQuaternion(_quaternion).normalize();
         }
 
-        /*
-        const projectileId = `laser-${botId}-${Date.now()}-${localProjectileCounter++}`;
-        laserSystem.spawnLaser(room.id, botId, origin, direction, projectileId);
-        */
+        if (bot.weapon === "laser") {
 
-        machinegunSystem.fire(
-            { roomId: room.id, room, shooterId: botId, origin, direction: _shootDir },
-            map => map.bvhMesh
-        );
+            bot.shotCooldown = 0.3 + Math.random() * 0.5;
+            const projectileId = `laser-${botId}-${Date.now()}-${localProjectileCounter++}`;
+            laserSystem.spawnLaser(room.id, botId, origin, _shootDir, projectileId);
+        }
+        else if (bot.weapon === "shotgun") {
+            bot.shotCooldown = 1.2 + Math.random() * 1.2;
+            shotgunSystem.fire(
+                { roomId: room.id, room, shooterId: botId, origin, direction: _shootDir },
+                map => map.bvhMesh
+            );
+        }
+        else if (bot.weapon === "machinegun") {
+            bot.shotCooldown = 0.2 + Math.random() * 0.2;
+            machinegunSystem.fire(
+                { roomId: room.id, room, shooterId: botId, origin, direction: _shootDir },
+                map => map.bvhMesh
+            );
+        }
+        else if (bot.weapon === "rocket") {
+            bot.shotCooldown = 1.5 + Math.random() * 1.5;
+            const projectileId = `rocket-${botId}-${Date.now()}-${localProjectileCounter++}`;
+            rocketSystem.launchRocket(room.id, projectileId, botId, origin, _shootDir, { ...origin });
+        }
     }
 
     return {

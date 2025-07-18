@@ -127,7 +127,7 @@ export function createAudioSystem({ scene, cameraSystem }) {
 
     EventBus.on("grappleAttached", ({ roomId, origin, direction }) => {
         loadAudioBuffer('https://www.dailysummary.io/sounds/hook.wav', (buffer) => {
-            playOneShotPositional(buffer, origin, 1.2);
+            playOneShotPositional(buffer, origin, 2);
         });
     });
 

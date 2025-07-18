@@ -103,7 +103,7 @@ EventBus.on("healthPacksSystem:healthPackRespawned", ({ roomId, id }) => {
 });
 
 // bots system
-const botsSystem = createBotsSystem({ laserSystem, machinegunSystem, health: PLAYER_HEALTH });
+const botsSystem = createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem, rocketSystem, health: PLAYER_HEALTH });
 
 EventBus.on("botsSystem:moved", ({ botId, room, position, rotation, isIdle, isGrounded }) => {
     if (!position || !room.players) return;
@@ -338,13 +338,15 @@ async function handleGameSocket(socket, roomId, name, modelName, mapName, allowB
 
         allowBots = typeof allowBots === 'string' ? allowBots.toLowerCase() === 'true' : allowBots
         if (allowBots === true) {
-            const name1 = 'Mr. Dumb Red Bot';
-            const name2 = 'Mr. Dumb Green Bot';
-            botsSystem.spawnBot(1, name1, "Soldier1.glb", room);
-            botsSystem.spawnBot(2, name2, "Soldier2.glb", room);
 
-            io.to(roomId).emit('serverMessage', { roomId: room.id, message: `${name1} joined the game.` });
-            io.to(roomId).emit('serverMessage', { roomId: room.id, message: `${name2} joined the game.` });
+            for (let i = 0; i < 4; i++) {
+
+                const bot = botsSystem.spawnBot(i, room);
+                io.to(roomId).emit('serverMessage', {
+                    roomId: room.id,
+                    message: `${bot.name} joined the game.`
+                });
+            }
         }
 
         io.to(roomId).emit("playerList", room.players);
