@@ -288,6 +288,7 @@ const NetworkSystem = (() => {
     function handlePlayerDied({ playerId, position, message, stats }) {
         const player = GameSystem.getPlayer(playerId);
         if (player) player.visible = false;
+        GameSystem.updateStats(stats);
         EventBus.emit("player:died", { playerId, message, position, stats });
     }
 
@@ -411,6 +412,7 @@ NetworkSystem.init();
 const GameSystem = (() => {
     let gameStarted = false;
     let roomId = null;
+    let stats = [];
     const players = {};
 
     async function createRoom(allowBots) {
@@ -648,6 +650,12 @@ const GameSystem = (() => {
             }
         }
     });
+    
+    function updateStats(newStats) {
+        stats = newStats || [];
+    }
+
+    EventBus.on("input:showMap", () => UISystem.toggleStatsOverlay(stats));
 
     function playAnimation(playerModel, animationName) {
         if (playerModel?.userData?.actions == null) {
@@ -724,6 +732,7 @@ const GameSystem = (() => {
         isGameStarted: () => gameStarted,
         getRoomId: () => roomId,
         update,
+        updateStats,
         addPlayer,
         removePlayer: id => {
             if (players[id]) {

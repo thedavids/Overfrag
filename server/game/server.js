@@ -538,8 +538,9 @@ function respawnPlayer(roomId, playerId, shooterId, action, timer = 1000) {
     room.players[playerId].health = 0;
     room.players[playerId].isDead = true;
 
-    const stats = Object.values(room.players)
-        .map(p => ({
+    const stats = Object.entries(room.players)
+        .map(([id, p]) => ({
+            id,
             name: p.name,
             kill: p.kill,
             death: p.death,

@@ -254,15 +254,47 @@ export function createUISystem({
 
     function showStatsOverlay(stats) {
         const overlay = document.getElementById("statsOverlay");
-        overlay.innerHTML = stats.map(p =>
-            `<div>${p.name} — ${p.kill}K / ${p.death}D (KD: ${p.kdratio.toFixed(2)})</div>`
-        ).join("");
-        overlay.style.display = "flex"; // Use flex for centering
+
+        const tableHTML = `
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Kills</th>
+                    <th>Deaths</th>
+                    <th>K/D</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${stats.map(p => `
+                    <tr class="${gameState.playerId === p.id ? "self-row" : ""}">
+                        <td>${p.name}</td>
+                        <td>${p.kill}</td>
+                        <td>${p.death}</td>
+                        <td>${p.kdratio.toFixed(2)}</td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+
+        overlay.innerHTML = tableHTML;
+        overlay.style.display = "flex";
     }
 
     function hideStatsOverlay() {
         const overlay = document.getElementById("statsOverlay");
         overlay.style.display = "none";
+    }
+
+    function toggleStatsOverlay(stats) {
+        const overlayDisplay = document.getElementById("statsOverlay")?.style?.display || "none";
+        if (overlayDisplay === "none") {
+            showStatsOverlay(stats);
+        }
+        else {
+            hideStatsOverlay();
+        }
     }
 
     function showSpinner() {
@@ -290,6 +322,7 @@ export function createUISystem({
         getHudScene: () => hudScene,
         getCrosshair: () => crosshair,
         resize,
+        toggleStatsOverlay,
         showSpinner,
         hideSpinner
     };

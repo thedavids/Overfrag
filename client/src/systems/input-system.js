@@ -61,6 +61,7 @@ export function createInputSystem({
             else if (key === 'g') EventBus.emit("input:fireGrapple");
             else if (key === 'f') EventBus.emit("input:shootBegin");
             else if (key === 'v') EventBus.emit("input:toggleView");
+            else if (key === 'm') EventBus.emit("input:showMap");
             else if (key >= '1' && key <= '5') {
                 EventBus.emit("input:switchWeapon", { weaponId: parseInt(key) });
             }

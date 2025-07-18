@@ -235,6 +235,19 @@
         pointer-events: none;
     }
 
+    .stats-table {
+        position: absolute;
+        top: 10px;
+        margin: 0 auto;
+    }
+
+    .self-row {
+        background-color: #2a4a7a;
+        /* or any highlight color */
+        color: #fff;
+        font-weight: bold;
+    }
+
     .spinner-overlay {
         position: fixed;
         top: 0;
