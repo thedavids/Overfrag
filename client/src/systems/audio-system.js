@@ -3,6 +3,11 @@ import { EventBus, GameState } from 'shared';
 
 export function createAudioSystem({ scene, cameraSystem }) {
 
+    let isTabActive = true;
+    document.addEventListener("visibilitychange", () => {
+        isTabActive = !document.hidden;
+    });
+
     // We’ll cache decoded buffers so we don’t re-decode every shot
     const audioBuffers = {};
     const listener = new THREE.AudioListener();
@@ -25,6 +30,10 @@ export function createAudioSystem({ scene, cameraSystem }) {
     }
 
     function playOneShotPositional(buffer, position, volume = 0.8) {
+        if (isTabActive === false) {
+            return;
+        }
+
         // Create a temporary PositionalAudio node
         const sound = new THREE.PositionalAudio(listener);
         sound.setBuffer(buffer);
@@ -42,6 +51,10 @@ export function createAudioSystem({ scene, cameraSystem }) {
     }
 
     function playSoundSequence(soundNames, position, volume = 0.1) {
+        if (isTabActive === false) {
+            return;
+        }
+
         const buffers = [];
 
         function loadAll(index = 0) {
