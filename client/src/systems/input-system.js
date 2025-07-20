@@ -1,4 +1,3 @@
-
 import { EventBus, GameState } from 'shared';
 
 export function createInputSystem({
@@ -25,6 +24,40 @@ export function createInputSystem({
     EventBus.on("game:started", (gs) => { gameState = gs; });
     EventBus.on("game:ended", () => { gameState.clear(); });
 
+    const defaultSettings = {
+        keyBindings: {
+            jump: ' ',
+            fire: 'f',
+            grapple: 'g',
+            toggleView: 'v',
+            showStats: 'm',
+            switchWeapon: ['1', '2', '3', '4', '5']
+        },
+        lookSensitivity: 0.002,
+        invertY: false
+    };
+
+    const settings = {
+        ...defaultSettings,
+        ...JSON.parse(localStorage.getItem("gameInputSettings") || '{}')
+    };
+
+    function saveSettings(newSettings) {
+        Object.assign(settings, newSettings);
+        localStorage.setItem("gameInputSettings", JSON.stringify(settings));
+    }
+
+    function restoreSettings() {
+        Object.assign(settings, defaultSettings);
+        localStorage.removeItem("gameInputSettings");
+
+        document.getElementById("sensitivitySlider").value = settings.lookSensitivity;
+        document.getElementById("invertYCheckbox").checked = settings.invertY;
+        document.getElementById("keyJump").value = settings.keyBindings.jump;
+        document.getElementById("keyFire").value = settings.keyBindings.fire;
+        document.getElementById("keyGrapple").value = settings.keyBindings.grapple;
+    }
+
     function isGameStarted() {
         return !!gameState.playerObj;
     }
@@ -50,31 +83,37 @@ export function createInputSystem({
         return { playerYaw, playerPitch };
     }
 
+    function handleKeydown(key) {
+        const { keyBindings } = settings;
+        if (key === keyBindings.jump) requestJump();
+        else if (key === keyBindings.fire) EventBus.emit("input:shootBegin");
+        else if (key === keyBindings.grapple) EventBus.emit("input:fireGrapple");
+        else if (key === keyBindings.toggleView) EventBus.emit("input:toggleView");
+        else if (key === keyBindings.showStats) EventBus.emit("input:showStats");
+        else if (keyBindings.switchWeapon.includes(key)) {
+            EventBus.emit("input:switchWeapon", { weaponId: parseInt(key) });
+        }
+    }
+
+    function handleKeyup(key) {
+        const { keyBindings } = settings;
+        if (key === keyBindings.fire) EventBus.emit("input:shootEnd");
+        else if (key === keyBindings.grapple) EventBus.emit("input:releaseGrapple");
+    }
+
     function setup() {
         document.addEventListener('keydown', e => {
             if (!isGameStarted()) return;
-
             const key = e.key.toLowerCase();
             keyState[key] = true;
-
-            if (key === ' ') requestJump();
-            else if (key === 'g') EventBus.emit("input:fireGrapple");
-            else if (key === 'f') EventBus.emit("input:shootBegin");
-            else if (key === 'v') EventBus.emit("input:toggleView");
-            else if (key === 'm') EventBus.emit("input:showMap");
-            else if (key >= '1' && key <= '5') {
-                EventBus.emit("input:switchWeapon", { weaponId: parseInt(key) });
-            }
+            handleKeydown(key);
         });
 
         document.addEventListener('keyup', e => {
             if (!isGameStarted()) return;
-
             const key = e.key.toLowerCase();
             keyState[key] = false;
-
-            if (key === 'g') EventBus.emit("input:releaseGrapple");
-            if (key === 'f') EventBus.emit("input:shootEnd");
+            handleKeyup(key);
         });
 
         if (btnJump) {
@@ -89,6 +128,7 @@ export function createInputSystem({
                 e.preventDefault();
                 EventBus.emit("input:shootBegin");
             }, { passive: false });
+
             ['touchend', 'touchcancel'].forEach(evt =>
                 btnFire.addEventListener(evt, () => EventBus.emit("input:shootEnd"))
             );
@@ -99,6 +139,7 @@ export function createInputSystem({
                 e.preventDefault();
                 EventBus.emit("input:fireGrapple");
             }, { passive: false });
+
             ['touchend', 'touchcancel'].forEach(evt =>
                 btnGrapple.addEventListener(evt, () => EventBus.emit("input:releaseGrapple"))
             );
@@ -111,13 +152,13 @@ export function createInputSystem({
             }, { passive: false });
         }
 
+        // Touch Wheel Movement
         const keyMapWheel = { up: 'w', down: 's', left: 'a', right: 'd' };
         let wheelTouchId = null;
         let wheelStart = null;
 
         function updateDirectionFromAngle(angle) {
             for (const key of Object.values(keyMapWheel)) keyState[key] = false;
-
             if (angle >= -Math.PI / 4 && angle < Math.PI / 4) keyState[keyMapWheel.right] = true;
             else if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) keyState[keyMapWheel.down] = true;
             else if (angle >= -3 * Math.PI / 4 && angle < -Math.PI / 4) keyState[keyMapWheel.up] = true;
@@ -129,29 +170,24 @@ export function createInputSystem({
                 const touch = e.changedTouches[0];
                 wheelTouchId = touch.identifier;
                 wheelStart = { x: touch.clientX, y: touch.clientY };
-
                 const rect = touchWheel.getBoundingClientRect();
                 const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
                 const dx = touch.clientX - center.x;
                 const dy = touch.clientY - center.y;
                 const angle = Math.atan2(dy, dx);
                 updateDirectionFromAngle(angle);
-
                 e.preventDefault();
             }, { passive: false });
 
             touchWheel.addEventListener('touchmove', e => {
                 const touch = [...e.touches].find(t => t.identifier === wheelTouchId);
                 if (!touch || !wheelStart) return;
-
                 const dx = touch.clientX - wheelStart.x;
                 const dy = touch.clientY - wheelStart.y;
-
                 if (Math.hypot(dx, dy) > 10) {
                     const angle = Math.atan2(dy, dx);
                     updateDirectionFromAngle(angle);
                 }
-
                 e.preventDefault();
             }, { passive: false });
 
@@ -197,6 +233,42 @@ export function createInputSystem({
                 e.preventDefault();
             }
         });
+
+        const controlButtons = document.getElementsByClassName("btnControls");
+        for (const btn of controlButtons) {
+            btn.addEventListener("click", () => {
+                document.getElementById("controlsModal").classList.remove("hidden");
+                document.getElementById("sensitivitySlider").value = settings.lookSensitivity;
+                document.getElementById("invertYCheckbox").checked = settings.invertY;
+                document.getElementById("keyJump").value = settings.keyBindings.jump;
+                document.getElementById("keyFire").value = settings.keyBindings.fire;
+                document.getElementById("keyGrapple").value = settings.keyBindings.grapple;
+            });
+        }
+
+        document.getElementById("resetControlsBtn").addEventListener("click", () => {
+            restoreSettings();
+        });
+
+        document.getElementById("closeControlsBtn").addEventListener("click", () => {
+            document.getElementById("controlsModal").classList.add("hidden");
+        });
+
+        document.getElementById("saveControlsBtn").addEventListener("click", () => {
+            saveSettings({
+                lookSensitivity: parseFloat(document.getElementById("sensitivitySlider").value),
+                invertY: document.getElementById("invertYCheckbox").checked,
+                keyBindings: {
+                    ...settings.keyBindings,
+                    jump: document.getElementById("keyJump").value || ' ',
+                    fire: document.getElementById("keyFire").value || 'f',
+                    grapple: document.getElementById("keyGrapple").value || 'g'
+                }
+            });
+
+            document.getElementById("controlsModal").classList.add("hidden");
+        });
+
     }
 
     function setupLookControls() {
@@ -205,8 +277,11 @@ export function createInputSystem({
         }
 
         function onMouseMove(e) {
-            playerYaw -= e.movementX * 0.002;
-            playerPitch -= e.movementY * 0.002;
+            const sensitivity = settings.lookSensitivity;
+            const invert = settings.invertY ? -1 : 1;
+
+            playerYaw -= e.movementX * sensitivity;
+            playerPitch -= e.movementY * sensitivity * invert;
             playerPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, playerPitch));
         }
 
@@ -216,9 +291,13 @@ export function createInputSystem({
             else document.removeEventListener('mousemove', onMouseMove);
         });
 
-        document.addEventListener('click', () => {
+        document.addEventListener('click', (e) => {
             if (!isGameStarted()) return;
-            if (document.pointerLockElement !== document.body) enablePointerLock();
+
+            const canvas = document.querySelector("#canvas-container canvas");
+            if (canvas && e.target === canvas && document.pointerLockElement !== document.body) {
+                enablePointerLock();
+            }
         });
 
         document.addEventListener('touchstart', e => {
@@ -240,8 +319,11 @@ export function createInputSystem({
                     const deltaX = touch.clientX - lastTouchPos.x;
                     const deltaY = touch.clientY - lastTouchPos.y;
 
-                    playerYaw -= deltaX * 0.008;
-                    playerPitch -= deltaY * 0.008;
+                    const sensitivity = settings.lookSensitivity;
+                    const invert = settings.invertY ? -1 : 1;
+
+                    playerYaw -= deltaX * sensitivity;
+                    playerPitch -= deltaY * sensitivity * invert;
                     playerPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, playerPitch));
 
                     lastTouchPos = { x: touch.clientX, y: touch.clientY };
@@ -268,6 +350,9 @@ export function createInputSystem({
         getLookAngles,
         isJumpBuffered,
         clearJumpBuffer,
-        requestJump
+        requestJump,
+        saveSettings,
+        restoreSettings,
+        settings
     };
 }

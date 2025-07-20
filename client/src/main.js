@@ -650,12 +650,12 @@ const GameSystem = (() => {
             }
         }
     });
-    
+
     function updateStats(newStats) {
         stats = newStats || [];
     }
 
-    EventBus.on("input:showMap", () => UISystem.toggleStatsOverlay(stats));
+    EventBus.on("input:showStats", () => UISystem.toggleStatsOverlay(stats));
 
     function playAnimation(playerModel, animationName) {
         if (playerModel?.userData?.actions == null) {
