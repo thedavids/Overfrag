@@ -6,6 +6,8 @@ import * as MathUtils from './math-utils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVH, acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -70,10 +72,17 @@ export async function prepareMap(name) {
 
             return geometry;
         }).filter(Boolean);
+
         const mergedGeometry = mergeGeometries(allGeometries, false);
+
+        // Build the bounds tree
+        mergedGeometry.computeBoundsTree = MeshBVH.prototype.build;
         mergedGeometry.boundsTree = new MeshBVH(mergedGeometry);
 
-        map.bvhMesh = mergedGeometry;
+        // Wrap in Mesh
+        const bvhMesh = new THREE.Mesh(mergedGeometry, new THREE.MeshBasicMaterial());
+        map.bvhMesh = bvhMesh; // This is now usable for raycasting + shapecast
+
     }
 
     return map;

@@ -38,8 +38,7 @@ export function createRocketSystem() {
             if (!room) continue;
 
             const rockets = activeRockets[roomId];
-            const geometry = getBVHGeometry(room.map);
-            tempMesh.geometry = geometry;
+            let tempMesh = getBVHGeometry(room.map);
 
             for (let i = rockets.length - 1; i >= 0; i--) {
                 const rocket = rockets[i];

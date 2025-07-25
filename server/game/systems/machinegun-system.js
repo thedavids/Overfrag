@@ -23,7 +23,7 @@ export function createMachineGunSystem() {
         tempRaycaster.ray.direction.copy(tempDir);
         tempRaycaster.far = RANGE;
 
-        tempMesh.geometry = getBVHGeometry(room.map);
+        let tempMesh = getBVHGeometry(room.map);
 
         const hits = tempRaycaster.intersectObject(tempMesh, true);
 

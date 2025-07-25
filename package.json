@@ -4,8 +4,5 @@
     "client",
     "server",
     "shared"
-  ],
-  "dependencies": {
-    "three": "^0.160.0"
-  }
+  ]
 }

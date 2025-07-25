@@ -83,7 +83,7 @@ export function createShotgunSystem() {
         const spreadAngle = MIN_SPREAD_ANGLE + ease * (BASE_SPREAD_ANGLE - MIN_SPREAD_ANGLE);
 
         const hitsPerPlayer = {};
-        tempMesh.geometry = getBVHGeometry(room.map);
+        let tempMesh = getBVHGeometry(room.map);
 
         for (let i = 0; i < PELLET_COUNT; i++) {
             const pelletDir = getSpreadDirection(direction, spreadAngle);

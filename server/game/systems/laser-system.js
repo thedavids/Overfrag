@@ -37,7 +37,7 @@ export function createLaserSystem() {
             if (!room || !lasers) continue;
 
             const players = room.players;
-            tempMesh.geometry = getBVHGeometry(room.map);
+            let tempMesh = getBVHGeometry(room.map);
 
             for (let i = lasers.length - 1; i >= 0; i--) {
                 const laser = lasers[i];
