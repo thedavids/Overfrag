@@ -140,22 +140,19 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
         return new THREE.Vector3(centerX, centerY, centerZ);
     }
 
+    const _tempVec1 = new THREE.Vector3();
     function getYforXZ(bvhMesh, x, z) {
-        let y = 200; // fallback spawn height
+        let y = 200;
 
         if (bvhMesh) {
-            // Ensure tempMesh has proper geometry and material
-            let tempMesh = bvhMesh;
-            if (!tempMesh.material) {
-                tempMesh.material = new THREE.MeshBasicMaterial();
-            }
+            const rayOrigin = _tempVec1.set(x, 1000, z);
+            sharedRaycaster.set(rayOrigin, _intersectsBelowDir);
+            sharedRaycaster.near = 0;
+            sharedRaycaster.far = 2000;
 
-            const rayOrigin = new THREE.Vector3(x, 1000, z);
-            const raycaster = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 2000);
-            const hits = raycaster.intersectObject(tempMesh, true);
-
+            const hits = sharedRaycaster.intersectObject(bvhMesh, true);
             if (hits.length > 0) {
-                y = hits[0].point.y + botHeight / 2; // Position bot center at ground + half height
+                y = hits[0].point.y + botHeight / 2;
             }
         }
         return y;
@@ -189,7 +186,6 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
     const _triSegment = new THREE.Line3();
     const _triClosestPoint = new THREE.Vector3();
     const _triTmpVec = new THREE.Vector3();
-
     const _targetPos = new THREE.Vector3();
     const _strafeOffset = new THREE.Vector3();
     const _clonedTarget = new THREE.Vector3();
@@ -294,10 +290,10 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
             const nextPos = calculateNextPosition(bot, _desiredMovement, bvhMesh, delta);
 
             // === Ground Check ===
-            if (!bot.isGrounded && bot.fallVelocity <= 0) {
-                bot.isGrounded = checkGrounded(nextPos, bvhMesh);
-            }
-            if (bot.isGrounded) {
+            const wasGrounded = bot.isGrounded;
+            bot.isGrounded = checkGrounded(nextPos, bvhMesh);
+
+            if (bot.isGrounded && !wasGrounded) {
                 bot.fallVelocity = 0;
                 bot.jumping = false;
             }
@@ -564,10 +560,8 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
 
     // Enhanced stuck detection and recovery system
     function handleStuckBot(bot, delta, tempMesh) {
-        const STUCK_THRESHOLD = 0.05; // Minimum movement required
+        const STUCK_THRESHOLD = 0.5; // Minimum movement required
         const STUCK_TIME_THRESHOLD = 1.0; // Time before considering stuck
-        const EMERGENCY_TELEPORT_TIME = 5.0; // Time before emergency teleport
-        const MAX_UNSTUCK_ATTEMPTS = 3;
         const POSITION_HISTORY_SIZE = 10;
 
         // Update position history
@@ -658,7 +652,7 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
         const currentTime = Date.now() / 1000;
 
         // Prevent too frequent unstuck attempts
-        if (currentTime - bot.lastUnstuckTime < 0.5) {
+        if (currentTime - bot.lastUnstuckTime < 5.0) {
             return null;
         }
 
@@ -672,29 +666,31 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
             case 4:
             case 5:
                 // Try random movement first 5 times
-                return attemptRandomMovement(bot, tempMesh);
+                return attemptRandomMovement(bot, tempMesh, bot.unstuckAttempts);
 
             case 6:
             case 7:
-                // Try jumping + movement
-                return attemptJumpAndMove(bot, tempMesh, delta);
-
             case 8:
             case 9:
-                // Try to find nearest open space
-                return attemptNearestOpenSpace(bot, tempMesh);
-
             case 10:
             case 11:
             case 12:
+                // Try jumping + movement
+                return attemptJumpAndMove(bot, tempMesh, bot.unstuckAttempts - 2);
+
+            case 13:
+            case 14:
+            case 15:
+            case 16:
+            case 17:
                 // One more open space attempt with larger radius (optional)
-                return attemptNearestOpenSpace(bot, tempMesh);
+                return attemptNearestOpenSpace(bot, tempMesh, bot.unstuckAttempts - 8);
 
             default:
-                if (bot.emergencyTeleportCooldown <= 0) {
+                /*if (bot.emergencyTeleportCooldown <= 0) {
                     bot.emergencyTeleportCooldown = 10.0; // 10 second cooldown
                     return attemptEmergencyTeleport(bot, tempMesh);
-                }
+                }*/
                 break;
         }
 
@@ -714,8 +710,7 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
         [1, 0, -1],
         [-1, 0, -1],
     ];
-    function attemptRandomMovement(bot, tempMesh) {
-        const moveDistance = 2.0;
+    function attemptRandomMovement(bot, tempMesh, moveDistance) {
 
         // Shuffle _randomDirections (Fisher–Yates)
         for (let i = _randomDirections.length - 1; i > 0; i--) {
@@ -740,7 +735,7 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
 
 
     // Try jumping and moving
-    function attemptJumpAndMove(bot, tempMesh, delta) {
+    function attemptJumpAndMove(bot, tempMesh, radius) {
         // Force a jump
         bot.fallVelocity = 15; // Strong jump
         bot.isGrounded = false;
@@ -748,7 +743,7 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
         bot.jumpCooldown = 2.0;
 
         // Try to move in an open direction while jumping
-        const openDirection = findOpenDirection(bot, tempMesh, 4, 45);
+        const openDirection = findOpenDirection(bot, tempMesh, radius, 45);
         if (openDirection) {
             return openDirection;
         }
@@ -759,36 +754,48 @@ export function createBotsSystem({ laserSystem, shotgunSystem, machinegunSystem,
     // Find the nearest completely open space
     const _nearestTestOffset = new THREE.Vector3();
     const _nearestTestPos = new THREE.Vector3();
-    function attemptNearestOpenSpace(bot, tempMesh) {
-        const searchRadius = 5.0;
-        const stepSize = 1.0;
-        const testPositions = [];
+    const _nearestSorted = []; // reused array
+    const _nearestPosReuse = []; // reused Vector3 pool
 
-        // Generate test positions in a grid around the bot
+    function attemptNearestOpenSpace(bot, tempMesh, searchRadius) {
+        const stepSize = 1.0;
+        const origin = bot.position;
+
+        _nearestSorted.length = 0;
+
+        // Fill reusable pool if needed
+        const expectedCount = Math.pow((2 * searchRadius + 1), 2);
+        while (_nearestPosReuse.length < expectedCount) {
+            _nearestPosReuse.push(new THREE.Vector3());
+        }
+
+        let poolIndex = 0;
+
         for (let x = -searchRadius; x <= searchRadius; x += stepSize) {
             for (let z = -searchRadius; z <= searchRadius; z += stepSize) {
                 _nearestTestOffset.set(x, 0, z);
-                _nearestTestPos.copy(bot.position).add(_nearestTestOffset);
+                _nearestTestPos.copy(origin).add(_nearestTestOffset);
 
                 const groundY = getYforXZ(tempMesh, _nearestTestPos.x, _nearestTestPos.z);
                 _nearestTestPos.y = groundY;
 
-                testPositions.push({
-                    position: _nearestTestPos.clone(), // store copy for later use
-                    distance: bot.position.distanceTo(_nearestTestPos)
+                const pos = _nearestPosReuse[poolIndex++];
+                pos.copy(_nearestTestPos);
+
+                _nearestSorted.push({
+                    position: pos,
+                    distance: origin.distanceToSquared(pos) // use squared for performance
                 });
             }
         }
 
-        // Sort by distance (closest first)
-        testPositions.sort((a, b) => a.distance - b.distance);
+        // Sort positions by closest first
+        _nearestSorted.sort((a, b) => a.distance - b.distance);
 
-        // Find the first valid position
-        for (const test of testPositions) {
-            if (!checkCapsuleCollision(test.position, tempMesh, botRadius, botHeight)) {
-                const hasSpace = checkSurroundingSpace(test.position, tempMesh, botRadius * 1.5);
-                if (hasSpace) {
-                    return test.position;
+        for (const { position } of _nearestSorted) {
+            if (!checkCapsuleCollision(position, tempMesh, botRadius, botHeight)) {
+                if (checkSurroundingSpace(position, tempMesh, botRadius * 1.5)) {
+                    return position;
                 }
             }
         }

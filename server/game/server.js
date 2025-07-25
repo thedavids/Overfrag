@@ -461,6 +461,10 @@ let lastTimestamp = performance.now();
 let tickCount = 0;
 let prevCpuUsage = process.cpuUsage();
 
+let timeBots = 0;
+let timeLasers = 0;
+let timeRockets = 0;
+
 function mainLoop() {
     if (intervalId) clearInterval(intervalId);
 
@@ -469,13 +473,22 @@ function mainLoop() {
         const delta = now - lastTimestamp;
         lastTimestamp = now;
 
-        // Main tick logic
+        // === System timings ===
         const tickStart = performance.now();
-        laserSystem.updateLasers(delta, roomsSystem.getRooms, m => m.bvhMesh);
-        rocketSystem.updateRockets(delta, roomsSystem.getRooms, m => m.bvhMesh);
-        botsSystem.update(delta);
-        const tickDuration = performance.now() - tickStart;
 
+        const tLaserStart = performance.now();
+        laserSystem.updateLasers(delta, roomsSystem.getRooms, m => m.bvhMesh);
+        timeLasers += performance.now() - tLaserStart;
+
+        const tRocketStart = performance.now();
+        rocketSystem.updateRockets(delta, roomsSystem.getRooms, m => m.bvhMesh);
+        timeRockets += performance.now() - tRocketStart;
+
+        const tBotStart = performance.now();
+        botsSystem.update(delta);
+        timeBots += performance.now() - tBotStart;
+
+        const tickDuration = performance.now() - tickStart;
         avgTickTime = smoothing * tickDuration + (1 - smoothing) * avgTickTime;
 
         cleanupElapsed += delta;
@@ -496,17 +509,23 @@ function mainLoop() {
             const totalCpuMicros = currentCpu.user + currentCpu.system;
             const avgCpuMsPerTick = totalCpuMicros / tickCount / 1000;
 
-            console.log(`Ticks: ${tickCount}, Avg CPU: ${avgCpuMsPerTick.toFixed(2)}ms, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB`);
+            const avgBotsTime = timeBots / tickCount;
+            const avgLasersTime = timeLasers / tickCount;
+            const avgRocketsTime = timeRockets / tickCount;
 
-            // Reset
+            console.log(`Ticks: ${tickCount}, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB, Avg CPU: ${avgCpuMsPerTick.toFixed(2)}ms`);
+            console.log(`  Bots:   ${avgBotsTime.toFixed(2)}ms, Lasers: ${avgLasersTime.toFixed(2)}ms, Rockets:${avgRocketsTime.toFixed(2)}ms`);
+
+            // Reset stats
             statsElapsed = 0;
             tickCount = 0;
             prevCpuUsage = process.cpuUsage();
+            timeBots = 0;
+            timeLasers = 0;
+            timeRockets = 0;
         }
 
-        // Adapt tick rate if needed
         adaptTickRate();
-
     }, 1000 / tickRate);
 }
 
