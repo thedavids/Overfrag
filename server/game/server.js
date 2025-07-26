@@ -513,8 +513,8 @@ function mainLoop() {
             const avgLasersTime = timeLasers / tickCount;
             const avgRocketsTime = timeRockets / tickCount;
 
-            console.log(`Ticks: ${tickCount}, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB, Avg CPU: ${avgCpuMsPerTick.toFixed(2)}ms`);
-            console.log(`  Bots:   ${avgBotsTime.toFixed(2)}ms, Lasers: ${avgLasersTime.toFixed(2)}ms, Rockets:${avgRocketsTime.toFixed(2)}ms`);
+            console.log(`Ticks: ${tickCount}, RAM: ${(mem / 1024 / 1024).toFixed(1)} MB, Avg CPU: ${avgCpuMsPerTick.toFixed(2)}ms ` +
+                `  (Bots: ${avgBotsTime.toFixed(2)}ms, Lasers: ${avgLasersTime.toFixed(2)}ms, Rockets:${avgRocketsTime.toFixed(2)}ms)`);
 
             // Reset stats
             statsElapsed = 0;
